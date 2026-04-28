@@ -65,3 +65,13 @@ body {
   display: inline-block;
   min-width: 8.5em;
 }
+
+.transition-explanation {
+  border-top: 1px solid #e0e0e0;
+  margin-top: 0.6em;
+  padding-top: 0.6em;
+}
+
+.transition-explanation p {
+  margin: 0 0 0.35em;
+}

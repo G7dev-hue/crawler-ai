@@ -124,10 +124,18 @@ function formatPercent(value) {
 }
 
 function formatRelativePhase(state) {
+    const phase = relativePhaseValue(state);
+    if (phase === null) {
+        return "undefined";
+    }
+    return formatReal(phase,3) + " rad";
+}
+
+function relativePhaseValue(state) {
     const alpha = state['_data'][0];
     const beta = state['_data'][1];
     if (probability(alpha) === 0 || probability(beta) === 0) {
-        return "undefined";
+        return null;
     }
     let phase = phaseOf(beta) - phaseOf(alpha);
     while (phase <= -Math.PI) {
@@ -136,7 +144,146 @@ function formatRelativePhase(state) {
     while (phase > Math.PI) {
         phase -= 2 * Math.PI;
     }
-    return formatReal(phase,3) + " rad";
+    return phase;
+}
+
+function phaseDelta(beforePhase, afterPhase) {
+    if (beforePhase === null || afterPhase === null) {
+        return null;
+    }
+    let delta = afterPhase - beforePhase;
+    while (delta <= -Math.PI) {
+        delta += 2 * Math.PI;
+    }
+    while (delta > Math.PI) {
+        delta -= 2 * Math.PI;
+    }
+    return delta;
+}
+
+function clamp(value, minValue, maxValue) {
+    return Math.max(minValue,Math.min(value,maxValue));
+}
+
+function blochAngularDisplacement(beforeVector, afterVector) {
+    const beforeNorm = math.norm(beforeVector,2);
+    const afterNorm = math.norm(afterVector,2);
+    if (beforeNorm === 0 || afterNorm === 0) {
+        return 0;
+    }
+    const dot = math.dot(beforeVector,afterVector) / (beforeNorm * afterNorm);
+    return Math.acos(clamp(dot,-1,1));
+}
+
+function stateAmplitudes(state) {
+    return {
+        alpha: state['_data'][0],
+        beta: state['_data'][1]
+    };
+}
+
+function stateProbabilities(state) {
+    const amplitudes = stateAmplitudes(state);
+    return {
+        zero: probability(amplitudes.alpha),
+        one: probability(amplitudes.beta)
+    };
+}
+
+function analyzeTransition(beforeState, afterState) {
+    const effectiveBeforeState = beforeState || afterState;
+    const beforeAmplitudes = stateAmplitudes(effectiveBeforeState);
+    const afterAmplitudes = stateAmplitudes(afterState);
+    const beforeProbabilities = stateProbabilities(effectiveBeforeState);
+    const afterProbabilities = stateProbabilities(afterState);
+    const beforeVector = state2vector(effectiveBeforeState);
+    const afterVector = state2vector(afterState);
+    const beforePhase = relativePhaseValue(effectiveBeforeState);
+    const afterPhase = relativePhaseValue(afterState);
+
+    return {
+        amplitudes: {
+            before: beforeAmplitudes,
+            after: afterAmplitudes
+        },
+        probabilities: {
+            before: beforeProbabilities,
+            after: afterProbabilities,
+            deltaZero: afterProbabilities.zero - beforeProbabilities.zero,
+            deltaOne: afterProbabilities.one - beforeProbabilities.one
+        },
+        relativePhase: {
+            before: beforePhase,
+            after: afterPhase,
+            delta: phaseDelta(beforePhase,afterPhase)
+        },
+        bloch: {
+            before: beforeVector,
+            after: afterVector,
+            angularDisplacement: blochAngularDisplacement(beforeVector,afterVector)
+        }
+    };
+}
+
+function formatSignedPercent(value) {
+    const rounded = roundValue(value * 100,2);
+    if (rounded > 0) {
+        return "+" + rounded + "%";
+    }
+    return rounded + "%";
+}
+
+function formatPhaseValue(value) {
+    return value === null ? "undefined" : formatReal(value,3) + " rad";
+}
+
+function describeTransition(entry) {
+    if (!entry.beforeState) {
+        return [
+            "Probability redistribution: initialized at " + formatPercent(1) + " in |0⟩ and " + formatPercent(0) + " in |1⟩.",
+            "Phase shift: no relative phase is defined because |1⟩ has zero amplitude.",
+            "Bloch sphere movement: initial state is placed at x: 0, y: 0, z: 1.",
+            "Interpretation: this snapshot establishes the starting point for later transitions."
+        ];
+    }
+
+    const analysis = analyzeTransition(entry.beforeState,entry.afterState);
+    const probabilityText = "Probability redistribution: |0⟩ changed by " + formatSignedPercent(analysis.probabilities.deltaZero) + " and |1⟩ changed by " + formatSignedPercent(analysis.probabilities.deltaOne) + ".";
+    const phaseText = "Phase shift: relative phase moved from " + formatPhaseValue(analysis.relativePhase.before) + " to " + formatPhaseValue(analysis.relativePhase.after) + ", change " + formatPhaseValue(analysis.relativePhase.delta) + ".";
+    const blochText = "Bloch sphere movement: vector moved from (" + analysis.bloch.before.map(function(value) { return formatReal(value); }).join(", ") + ") to (" + analysis.bloch.after.map(function(value) { return formatReal(value); }).join(", ") + "), angular displacement " + formatReal(analysis.bloch.angularDisplacement,3) + " rad.";
+    const interpretationText = "Interpretation: " + transitionInterpretation(analysis);
+    return [probabilityText, phaseText, blochText, interpretationText];
+}
+
+function transitionInterpretation(analysis) {
+    const probabilityShift = Math.abs(analysis.probabilities.deltaZero) + Math.abs(analysis.probabilities.deltaOne);
+    const phaseShift = analysis.relativePhase.delta === null ? 0 : Math.abs(analysis.relativePhase.delta);
+    const movement = analysis.bloch.angularDisplacement;
+
+    if (movement < 0.001) {
+        return "the selected operation leaves the observable Bloch state effectively unchanged.";
+    }
+    if (probabilityShift < 0.001 && phaseShift >= 0.001) {
+        return "the state mainly changes phase while keeping the measurement probabilities stable.";
+    }
+    if (probabilityShift >= 0.001 && phaseShift < 0.001) {
+        return "the state mainly redistributes population between |0⟩ and |1⟩.";
+    }
+    return "the state changes both population balance and relative phase.";
+}
+
+function renderTransitionExplanation(entry) {
+    const explanation = document.getElementById('transition_explanation');
+    if (!explanation) {
+        return;
+    }
+    explanation.innerHTML = "";
+    const lines = describeTransition(entry);
+    for (let i = 0; i < lines.length; i++) {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = lines[i];
+        explanation.appendChild(paragraph);
+    }
 }
 
 function renderInspector() {
@@ -160,6 +307,7 @@ function renderInspector() {
     probabilities.textContent = "|0⟩: " + formatPercent(probability(alpha)) + ", |1⟩: " + formatPercent(probability(beta));
     bloch.textContent = "x: " + formatReal(vector[0]) + ", y: " + formatReal(vector[1]) + ", z: " + formatReal(vector[2]);
     phase.textContent = formatRelativePhase(state);
+    renderTransitionExplanation(entry);
 }
 
 function appendHistoryEntry(kind, label, params, beforeState, afterState) {
