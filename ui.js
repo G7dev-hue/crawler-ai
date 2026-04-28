@@ -10,6 +10,7 @@ init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
 // BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR)
 rabi_plot();
 renderTimeline();
+renderInspector();
 
 
 function getCurrentState() {
@@ -19,6 +20,7 @@ function getCurrentState() {
 function renderApp() {
     update_state_plot();
     renderTimeline();
+    renderInspector();
 }
 
 function truncateFutureHistory() {
@@ -72,6 +74,92 @@ function createInitialHistoryEntry(initialState) {
         afterVector: state2vector(initialState),
         createdAt: new Date().toISOString()
     };
+}
+
+function complexParts(value) {
+    if (typeof(value) === "number") {
+        return {re: value, im: 0};
+    }
+    return {
+        re: value.re || 0,
+        im: value.im || 0
+    };
+}
+
+function roundValue(value, digits=3) {
+    const factor = Math.pow(10,digits);
+    const rounded = Math.round(value * factor) / factor;
+    return Object.is(rounded,-0) ? 0 : rounded;
+}
+
+function formatReal(value, digits=3) {
+    return roundValue(value,digits).toString();
+}
+
+function formatComplex(value, digits=3) {
+    const parts = complexParts(value);
+    const re = roundValue(parts.re,digits);
+    const im = roundValue(parts.im,digits);
+    if (im === 0) {
+        return re.toString();
+    }
+    if (re === 0) {
+        return im + "i";
+    }
+    return re + (im >= 0 ? " + " : " - ") + Math.abs(im) + "i";
+}
+
+function probability(value) {
+    const parts = complexParts(value);
+    return parts.re * parts.re + parts.im * parts.im;
+}
+
+function phaseOf(value) {
+    const parts = complexParts(value);
+    return Math.atan2(parts.im,parts.re);
+}
+
+function formatPercent(value) {
+    return formatReal(value * 100,2) + "%";
+}
+
+function formatRelativePhase(state) {
+    const alpha = state['_data'][0];
+    const beta = state['_data'][1];
+    if (probability(alpha) === 0 || probability(beta) === 0) {
+        return "undefined";
+    }
+    let phase = phaseOf(beta) - phaseOf(alpha);
+    while (phase <= -Math.PI) {
+        phase += 2 * Math.PI;
+    }
+    while (phase > Math.PI) {
+        phase -= 2 * Math.PI;
+    }
+    return formatReal(phase,3) + " rad";
+}
+
+function renderInspector() {
+    const operation = document.getElementById('inspector_operation');
+    const ket = document.getElementById('inspector_ket');
+    const probabilities = document.getElementById('inspector_probabilities');
+    const bloch = document.getElementById('inspector_bloch');
+    const phase = document.getElementById('inspector_phase');
+    if (!operation || !ket || !probabilities || !bloch || !phase) {
+        return;
+    }
+
+    const entry = HISTORY[HISTORY_CURSOR];
+    const state = getCurrentState();
+    const alpha = state['_data'][0];
+    const beta = state['_data'][1];
+    const vector = entry.afterVector || state2vector(state);
+
+    operation.textContent = entry.label;
+    ket.textContent = formatComplex(alpha) + "|0> + " + formatComplex(beta) + "|1>";
+    probabilities.textContent = "|0>: " + formatPercent(probability(alpha)) + ", |1>: " + formatPercent(probability(beta));
+    bloch.textContent = "x: " + formatReal(vector[0]) + ", y: " + formatReal(vector[1]) + ", z: " + formatReal(vector[2]);
+    phase.textContent = formatRelativePhase(state);
 }
 
 function appendHistoryEntry(kind, label, params, beforeState, afterState) {
@@ -190,11 +278,12 @@ function undo() {
 function restart() {
     QMSTATEVECTOR = [gen_state(true)];
     BLOCHSPHERE =  gen_bloch_sphere();
-    STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
     PHOSPHOR = [];
     PHOSPHOR_ENABLED = true;
     HISTORY = [createInitialHistoryEntry(QMSTATEVECTOR[0])];
     HISTORY_CURSOR = 0;
+    STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
     init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
     renderTimeline();
+    renderInspector();
 }

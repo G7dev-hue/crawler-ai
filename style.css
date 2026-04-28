@@ -45,3 +45,23 @@ body {
   border-color: #1a237e;
   color: #ffffff;
 }
+
+.state-inspector {
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  color: #222222;
+  font-size: 0.9rem;
+  margin: 0 0 1em;
+  padding: 0.75em;
+}
+
+.state-inspector-title {
+  font-weight: 600;
+  margin-bottom: 0.4em;
+}
+
+.state-inspector-label {
+  color: #555555;
+  display: inline-block;
+  min-width: 8.5em;
+}
