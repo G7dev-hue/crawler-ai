@@ -1,0 +1,793 @@
+{
+  "part": 1,
+  "total_parts_estimate": 4,
+  "type": "core_problem_and_evolution",
+  "content": {
+    "core_problem_statement": "The system aims to automate complex web-based workflows (especially form-heavy government, legal, and enterprise portals) where traditional scraping and Selenium-based automation fail due to dynamic UI, inconsistent forms, session-based flows, and lack of stable APIs. The goal is to build an adaptive system that can understand, execute, and reuse web workflows without hardcoded site-specific logic.",
+    
+    "initial_user_idea": "Build a web crawler agent that can automatically fill forms, trigger dataset downloads, and retrieve structured data from complex portals without hardcoding selectors, using adaptive reasoning instead of brittle scraping logic.",
+    
+    "problem_context_examples": [
+      "WRIS hydrological dataset portal (India) - multi-step dependent dropdowns, slow JS UI",
+      "eCourts India system - multiple search modes, CAPTCHA, inconsistent tables",
+      "GST Portal India - multi-step dashboards and role-based flows",
+      "Income Tax e-Filing Portal - conditional forms and authentication flows",
+      "IRCTC booking system - strong anti-bot protections and session constraints"
+    ],
+    
+    "key_pain_points_identified": [
+      "Dynamic JavaScript-rendered forms break static scraping and Selenium selectors",
+      "Multi-step dependent UI flows (dropdown chains, conditional form rendering)",
+      "Session-based workflows with frequent expiration and state resets",
+      "Hidden backend API calls triggered only via UI interactions",
+      "CAPTCHA and anti-bot mechanisms blocking automation attempts",
+      "High maintenance cost and fragility of Selenium-based scripts",
+      "Lack of stable or official APIs for structured data extraction",
+      "Inconsistent UI layouts across sessions, regions, or user roles",
+      "Difficulty in generalizing automation across different websites"
+    ],
+    
+    "evolution_of_idea": [
+      "1. Initial approach: Traditional crawler/scraper-based system",
+      "2. Attempt: Selenium-based automation with hardcoded selectors",
+      "3. Failure: Scripts broke due to UI inconsistency and dynamic rendering",
+      "4. Insight: Need to understand UI semantics instead of DOM structure",
+      "5. Shift: Introduction of LLM-based agent for UI interpretation",
+      "6. Extension: Use browser automation engine (Playwright-like execution layer)",
+      "7. Key discovery: Network traffic reveals hidden backend APIs triggered by UI actions",
+      "8. Enhancement: Combine UI observation + network interception + interaction tracing",
+      "9. Critical design decision: Each website must be learned independently (no global learning)",
+      "10. Refinement: Introduce per-site "skill compilation" instead of ad-hoc execution",
+      "11. Final direction: Web workflow compiler system that converts interaction traces into reusable automation programs per website"
+    ],
+    
+    "final_concept_definition": "A domain-adaptive browser agent system that observes UI structure, interaction behavior, and network requests to reverse-engineer how a website works, then compiles each website into an isolated reusable 'skill' (automation program). These skills enable reliable execution of workflows such as form filling, navigation, and dataset extraction with minimal human intervention.",
+    
+    "core_goal": "Replace brittle scraping and manual automation with a structured system that learns website workflows as reusable execution programs, enabling adaptive, repeatable, and maintainable automation across heterogeneous web systems.",
+    
+    "system_identity_synthesis": "Websites are treated as interactive state machines. The agent does not scrape static content but instead learns the transitions between states (UI actions + network responses) and compiles them into executable workflows.",
+    
+    "design_principles_introduced": [
+      "No hardcoded selectors allowed",
+      "No global cross-site learning; all learning is site-isolated",
+      "UI + network + interaction signals must be combined for understanding",
+      "Each website is treated as a separate learnable system",
+      "Automation is compiled from traces, not manually authored",
+      "System must support re-learning when site changes"
+    ]
+  },
+  "next": "system_architecture_and_components"
+}
+
+
+
+
+
+
+```json id="p2k9x7"
+{
+  "part": 2,
+  "total_parts_estimate": 4,
+  "type": "system_architecture_and_components",
+  "content": {
+    "system_architecture_overview": "The system is a layered browser-based automation architecture that converts web interaction traces into reusable execution programs ('skills'). It combines reasoning (LLM), execution (browser automation), observation (UI + network monitoring), and compilation (workflow generation). The key design principle is separation of learning and execution with strict site-level isolation.",
+    
+    "core_architecture_graph": {
+      "global_flow": [
+        "User Goal + URL",
+        "Global Agent (LLM reasoning)",
+        "Task Planner (decomposition)",
+        "Exploration Mode (browser execution)",
+        "Observation Layer (UI + Network + Interaction capture)",
+        "Trace Aggregation Layer",
+        "Skill Compiler (workflow generation)",
+        "Skill Store (per-site isolated memory)",
+        "Execution Engine (deterministic replay)",
+        "Monitoring + Failure Detection",
+        "Re-learning Trigger (site-scoped only)"
+      ],
+
+      "primary_nodes": {
+        "global_agent": {
+          "role": "Central reasoning and coordination engine",
+          "responsibilities": [
+            "Interpret user intent",
+            "Generate exploration strategy",
+            "Handle uncertainty during navigation",
+            "Decide when to explore vs execute",
+            "Resolve conflicts between UI and network signals"
+          ]
+        },
+
+        "task_planner": {
+          "role": "Decomposes high-level goals into actionable steps",
+          "outputs": [
+            "Step sequences",
+            "Field hypotheses",
+            "Navigation strategy",
+            "Expected data outputs"
+          ]
+        },
+
+        "browser_execution_engine": {
+          "role": "Controlled browser runtime (Playwright-like)",
+          "capabilities": [
+            "Click, type, scroll",
+            "Form submission",
+            "Page navigation",
+            "File download handling",
+            "Session persistence management"
+          ]
+        },
+
+        "ui_observer": {
+          "role": "Extracts structured UI representation from rendered page",
+          "inputs": ["DOM", "Accessibility tree", "Rendered layout snapshot"],
+          "outputs": [
+            "Form fields",
+            "Input types",
+            "UI hierarchy",
+            "Interactive elements"
+          ]
+        },
+
+        "network_observer": {
+          "role": "Captures backend communication triggered by UI actions",
+          "inputs": ["XHR", "Fetch calls", "Web responses"],
+          "outputs": [
+            "API endpoints",
+            "Payload structures",
+            "Response schemas",
+            "Hidden data sources"
+          ]
+        },
+
+        "interaction_trace_logger": {
+          "role": "Unified event recorder",
+          "captures": [
+            "User/agent actions",
+            "UI state transitions",
+            "Network requests and responses",
+            "Input-output mappings",
+            "Timing and dependency chains"
+          ]
+        },
+
+        "skill_compiler": {
+          "role": "Transforms raw interaction traces into executable workflows",
+          "process": [
+            "Normalize traces",
+            "Infer field dependencies",
+            "Construct execution graph",
+            "Detect reusable patterns",
+            "Generate fallback logic",
+            "Optimize redundant steps"
+          ]
+        },
+
+        "skill_store": {
+          "role": "Persistent isolated memory system",
+          "structure": "One independent skill module per website",
+          "properties": [
+            "Versioned workflows",
+            "Site-specific execution rules",
+            "Historical trace summaries",
+            "Failure recovery metadata"
+          ]
+        },
+
+        "execution_engine": {
+          "role": "Deterministic runtime for compiled skills",
+          "behavior": [
+            "Load site-specific skill",
+            "Execute workflow steps",
+            "Validate outputs",
+            "Trigger local fallback if needed",
+            "Avoid global system changes"
+          ]
+        }
+      }
+    },
+
+    "learning_pipeline": {
+      "phase_1_exploration": [
+        "User provides URL + goal",
+        "Agent initializes isolated browser context",
+        "Performs guided or autonomous exploration",
+        "Collects initial UI structure"
+      ],
+
+      "phase_2_observation": [
+        "Capture DOM and accessibility tree",
+        "Monitor UI state transitions",
+        "Track network requests per interaction",
+        "Log full action-response mapping"
+      ],
+
+      "phase_3_trace_construction": [
+        "Merge UI + network + actions into unified interaction graph",
+        "Identify input-output relationships",
+        "Detect repeated or stable patterns",
+        "Infer hidden backend structures when possible"
+      ],
+
+      "phase_4_skill_compilation": [
+        "Convert interaction graph into executable workflow",
+        "Define step ordering and dependencies",
+        "Attach conditional branches",
+        "Generate fallback strategies",
+        "Compress redundant actions"
+      ],
+
+      "phase_5_validation_and_execution": [
+        "Run compiled skill in controlled mode",
+        "Verify output consistency",
+        "Monitor failure signals",
+        "Lock skill version if stable"
+      ]
+    },
+
+    "site_isolation_model": {
+      "principle": "Each website is treated as an independent learned system",
+      "rules": [
+        "No cross-site reuse of learned selectors",
+        "No global mutation of learned behaviors",
+        "Each skill operates in its own isolated namespace",
+        "Failures in one site do not affect others"
+      ],
+      "benefits": [
+        "Prevents cascading system failure",
+        "Improves robustness across heterogeneous sites",
+        "Enables parallel skill evolution per domain"
+      ]
+    },
+
+    "network_ui_fusion_model": {
+      "core_idea": "UI actions and network traffic are jointly analyzed to infer hidden system behavior",
+      "process": [
+        "Trigger UI interaction",
+        "Observe resulting network calls",
+        "Map UI fields to request parameters",
+        "Infer backend data structure where visible",
+        "Use network shortcuts when stable and valid"
+      ],
+      "constraints": [
+        "Network inference is fallback, not always primary source",
+        "If network is unavailable or obfuscated, rely on UI-only inference",
+        "No assumption of stable API access across sessions"
+      ]
+    },
+
+    "failure_handling_model": {
+      "failure_types": [
+        "UI structure change",
+        "Network endpoint change",
+        "Session expiration",
+        "Incorrect field inference",
+        "Multi-step workflow break"
+      ],
+      "prioritization": {
+        "soft_failure": [
+          "Minor UI change",
+          "Optional field mismatch",
+          "Recoverable step deviation"
+        ],
+        "hard_failure": [
+          "Session invalidation",
+          "Critical workflow break",
+          "Authentication failure"
+        ]
+      },
+      "recovery_strategy": [
+        "Soft failures → local step correction only",
+        "Hard failures → site-scoped re-exploration",
+        "Never trigger global system retraining",
+        "Preserve existing valid skill segments where possible"
+      ]
+    },
+
+    "design_constraints": {
+      "system_invariants": [
+        "No global learning across websites",
+        "No hardcoded selectors allowed",
+        "All workflows must be derived from observed behavior",
+        "Execution engine must remain deterministic once skill is compiled",
+        "Browser context is the only source of truth for web state"
+      ],
+      "resource_constraints": [
+        "Minimize LLM calls during execution phase",
+        "Cache extracted UI structures when stable",
+        "Avoid re-exploration unless failure threshold is exceeded"
+      ],
+      "behavioral_constraints": [
+        "Agent must prefer reuse of compiled skills over re-learning",
+        "Exploration mode is only triggered when execution fails",
+        "Network inference cannot override UI logic when inconsistent"
+      ]
+    },
+
+    "open_questions": [
+      "How should the system decide when a skill is 'stable enough' to lock version?",
+      "What threshold determines re-learning vs patching an existing skill?",
+      "How should conflicting signals between UI and network be resolved in ambiguous cases?",
+      "What is the optimal balance between exploration cost and execution reliability?",
+      "Should partial workflows be reusable across similar sites or strictly isolated?"
+    ],
+
+    "system_synthesis": "The system is fundamentally a web workflow compiler: it observes interactive websites, captures execution traces (UI + network + actions), and compiles them into isolated, reusable automation programs called 'skills'. Each website is treated as a state machine, and the agent's role is to infer state transitions and convert them into deterministic execution flows. Learning is strictly site-local, while reasoning is global."
+  },
+  "next": "constraints_and_design_principles"
+}
+```
+
+
+
+
+
+```json id="p3k9a1"
+{
+  "part": 3,
+  "total_parts_estimate": 4,
+  "type": "constraints_decision_logic_and_execution_guarantees",
+  "content": {
+    "purpose_of_this_layer": "Defines strict operational rules, decision policies, execution guarantees, termination conditions, and system boundaries that govern learning, execution, and recovery behavior. This ensures deterministic execution after compilation, bounded exploration, and fully controlled adaptation under failure conditions.",
+
+    "system_invariants": [
+      "Each website is treated as an isolated state machine with no shared learned logic across domains",
+      "No hardcoded DOM selectors or site-specific brittle rules are allowed in any layer",
+      "All automation logic must originate from observed interactions (UI + network + traces)",
+      "Once a skill is compiled, execution must be deterministic unless a failure is detected",
+      "Browser state is the ground truth for all web interactions",
+      "Learning is strictly scoped to individual websites",
+      "Execution does not trigger exploration unless explicitly required by failure conditions",
+      "No global cross-site memory or generalization is permitted"
+    ],
+
+    "decision_logic_model": {
+      "ui_vs_network_conflict_resolution": {
+        "rule": "UI signals are authoritative; network signals are secondary optimization hints",
+        "cases": [
+          {
+            "condition": "UI structure and network payload align",
+            "decision": "Use combined model for skill generation"
+          },
+          {
+            "condition": "Network contains richer structured data than UI",
+            "decision": "Use network as optimization only after validating UI mapping consistency"
+          },
+          {
+            "condition": "Network unavailable or incomplete",
+            "decision": "Fallback to UI-only inference"
+          },
+          {
+            "condition": "UI and network conflict",
+            "decision": "Prefer UI for execution logic; mark network as optional heuristic layer"
+          }
+        ]
+      },
+
+      "execution_vs_exploration_decision": {
+        "rule": "Execution is default mode; exploration is exception-driven",
+        "triggers_for_exploration": [
+          "No existing skill for target site",
+          "Hard execution failure after retry threshold",
+          "Detected structural UI change invalidating skill",
+          "Missing critical field or dependency inference"
+        ],
+        "principle": "Never explore if a valid skill can execute the task"
+      },
+
+      "skill_update_policy": {
+        "rule": "Skills are versioned and incrementally updated per site",
+        "cases": [
+          {
+            "condition": "Minor UI variation",
+            "action": "Local patch of affected workflow step only"
+          },
+          {
+            "condition": "Moderate workflow break",
+            "action": "Partial recompilation of affected skill segments"
+          },
+          {
+            "condition": "Severe structural change",
+            "action": "Full re-learning for that specific site only"
+          }
+        ]
+      }
+    },
+
+    "execution_guarantees": {
+      "determinism_guarantee": "Compiled skills execute deterministically under unchanged site conditions",
+      "isolation_guarantee": "Failures are strictly contained to affected site skill; no cross-site impact",
+      "bounded_learning_guarantee": "Learning is limited to observed interactions of a single site session scope",
+      "recovery_guarantee": "Any failure triggers localized recovery without affecting global system state",
+      "state_consistency_guarantee": "Browser state is continuously synchronized with execution model before each action",
+      "execution_safety_guarantee": "System will not perform actions outside observed or explicitly user-directed workflows"
+    },
+
+    "termination_conditions": {
+      "execution_must_stop_when": [
+        "Task output is successfully verified and complete",
+        "Hard failure occurs with no valid recovery path",
+        "Maximum retry threshold is exceeded for a step",
+        "Authentication/session becomes invalid",
+        "Critical workflow dependency is permanently broken"
+      ],
+
+      "termination_behavior": [
+        "Successful completion → finalize and store result",
+        "Recoverable failure → retry or patch locally",
+        "Unrecoverable failure → abort execution safely without side effects"
+      ]
+    },
+
+    "failure_handling_policy": {
+      "failure_classification": {
+        "soft_failure": [
+          "Minor UI layout shift",
+          "Optional field mismatch",
+          "Timing delays",
+          "Non-critical step deviation"
+        ],
+        "hard_failure": [
+          "Authentication/session failure",
+          "Broken workflow dependency",
+          "Missing critical UI elements",
+          "Invalid or missing network response structure"
+        ]
+      },
+
+      "response_strategy": {
+        "soft_failure_response": [
+          "Attempt local correction within current step",
+          "Reuse nearest valid skill step",
+          "Continue execution if system integrity is preserved"
+        ],
+        "hard_failure_response": [
+          "Abort current execution flow",
+          "Trigger site-scoped re-exploration",
+          "Regenerate or patch affected skill module",
+          "Preserve unaffected workflow segments"
+        ]
+      }
+    },
+
+    "re_learning_policy": {
+      "trigger_conditions": [
+        "Repeated execution failure after retry threshold",
+        "Structural mismatch between skill and current UI",
+        "Network schema change invalidates inference assumptions",
+        "Critical workflow step becomes unreachable"
+      ],
+
+      "scope_rules": [
+        "Re-learning is strictly site-scoped",
+        "No impact on other site skills",
+        "Partial reuse of valid skill segments is allowed",
+        "Full regeneration is last resort only"
+      ]
+    },
+
+    "cost_and_efficiency_constraints": {
+      "llm_usage_policy": [
+        "LLM is used only during planning and skill compilation phases",
+        "Execution phase must minimize or eliminate LLM dependency",
+        "Cached skills are always preferred over re-inference",
+        "Re-learning is triggered only when failure thresholds are exceeded"
+      ],
+
+      "browser_efficiency_policy": [
+        "Reuse browser sessions when safe",
+        "Avoid redundant navigation steps",
+        "Cache stable UI structure representations",
+        "Prefer deterministic execution over exploration"
+      ],
+
+      "optimization_goal": "Minimize interaction passes per site while maximizing deterministic success rate"
+    },
+
+    "safety_and_boundary_conditions": {
+      "hard_limits": [
+        "No CAPTCHA bypass or authentication evasion",
+        "No exploitation of vulnerabilities or security bypass attempts",
+        "No privilege escalation or adversarial behavior",
+        "Only operate within user-accessible browser sessions",
+        "No inference beyond observed UI or network context"
+      ],
+
+      "data_handling_rules": [
+        "Only visible UI or network-observable data is used",
+        "No persistent storage of sensitive credentials beyond session scope",
+        "No background or hidden system probing",
+        "No external data assumptions beyond browser context"
+      ]
+    },
+
+    "decision_priority_hierarchy": [
+      "1. Execute existing compiled skill (highest priority)",
+      "2. Apply local patch to skill",
+      "3. Use fallback execution path within skill graph",
+      "4. Trigger site-scoped re-learning",
+      "5. Abort execution safely (final fallback)"
+    ],
+
+    "system_behavioral_contract": "The system must always prioritize deterministic execution over exploration, maintain strict site isolation, minimize learning cycles, ensure safe bounded behavior, and treat compiled skills as executable programs rather than probabilistic reasoning outputs."
+  },
+  "validation_status": "COMPLETE",
+  "next": "final_synthesis_part_4"
+}
+```
+
+
+
+```json id="p4k9z9"
+{
+  "part": 4,
+  "total_parts_estimate": 4,
+  "type": "final_synthesis_and_complete_system_model",
+  "content": {
+    "system_identity": "The system is a Web Workflow Compiler Agent that converts interactive websites into deterministic, reusable execution programs ('skills') by observing UI behavior, network activity, and interaction traces. It operates as a dual-phase system: learning (exploration + compilation) and execution (deterministic replay), with strict site-level isolation and bounded adaptation rules.",
+
+    "core_unified_architecture": {
+      "layers": [
+        {
+          "layer": "Reasoning Layer",
+          "components": ["Global Agent", "Task Planner"],
+          "function": "Interpret user goals and generate structured execution or exploration plans"
+        },
+        {
+          "layer": "Observation Layer",
+          "components": ["UI Observer", "Network Observer", "Interaction Trace Logger"],
+          "function": "Capture web behavior as structured signals (UI state, network calls, user actions)"
+        },
+        {
+          "layer": "Compilation Layer",
+          "components": ["Skill Compiler"],
+          "function": "Convert interaction traces into executable workflow graphs (skills)"
+        },
+        {
+          "layer": "Memory Layer",
+          "components": ["Skill Store"],
+          "function": "Persist versioned, site-isolated execution programs"
+        },
+        {
+          "layer": "Execution Layer",
+          "components": ["Browser Execution Engine"],
+          "function": "Deterministically execute compiled skills in controlled browser environment"
+        }
+      ]
+    },
+
+    "unified_execution_model": {
+      "phases": [
+        "1. Input Phase: User provides URL + goal",
+        "2. Planning Phase: Task Planner decomposes goal into steps",
+        "3. Execution Decision Phase: Check if skill exists for site",
+        "4. Exploration Phase (if needed): Browser explores UI structure",
+        "5. Observation Phase: Capture UI + network + interaction traces",
+        "6. Compilation Phase: Build executable workflow graph (skill)",
+        "7. Storage Phase: Store skill in site-isolated memory",
+        "8. Execution Phase: Deterministically run compiled skill",
+        "9. Monitoring Phase: Detect failures and evaluate recovery",
+        "10. Re-learning Phase (if triggered): Site-scoped re-exploration only"
+      ]
+    },
+
+    "decision_and_control_unification": {
+      "execution_priority_model": [
+        "1. Execute existing skill (default path)",
+        "2. Apply local patch to skill if deviation is minor",
+        "3. Use fallback branch within skill graph",
+        "4. Trigger site-scoped re-learning if failure threshold exceeded",
+        "5. Abort execution if no valid recovery path exists"
+      ],
+
+      "conflict_resolution_rules": {
+        "ui_vs_network": "UI state is authoritative; network is secondary optimization signal",
+        "execution_vs_exploration": "Execution always preferred unless skill is invalid or missing",
+        "multiple_valid_paths": "Select path with highest observed success frequency during trace phase; if equal, prefer shortest deterministic path",
+        "uncertain_decisions": "Fallback to UI-derived structure over network-derived inference"
+      }
+    },
+
+    "termination_and_bounds": {
+      "execution_termination_conditions": [
+        "Task successfully completed and validated",
+        "Hard failure with no recoverable execution path",
+        "Maximum retry threshold exceeded for a step (default: 3)",
+        "Total execution timeout exceeded (default: 5 minutes per task)",
+        "Browser session invalidation or authentication loss",
+        "Resource exhaustion or repeated unstable execution cycles"
+      ],
+
+      "system_hard_limits": {
+        "max_step_retries": 3,
+        "max_exploration_passes_per_site": 2,
+        "max_relearning_cycles_per_site": 2,
+        "global_task_timeout_minutes": 10
+      },
+
+      "unsupported_site_policy": "If repeated failures occur after max re-learning cycles, the site is marked as 'unsupported for automation' and no further exploration is attempted unless explicitly reset by user"
+    },
+
+    "full_system_invariants": [
+      "Each website is an isolated state machine with independent skill memory",
+      "No global cross-site learning or shared DOM assumptions are allowed",
+      "No hardcoded selectors or brittle automation rules exist anywhere in the system",
+      "All workflows must be derived from observed interaction traces",
+      "Compiled skills are deterministic execution programs",
+      "Browser state is the ground truth of system execution",
+      "Learning is strictly site-scoped and event-driven",
+      "Execution does not trigger exploration unless failure thresholds are met",
+      "System must remain deterministic once a skill is compiled and validated"
+    ],
+
+    "cost_and_efficiency_contract": {
+      "llm_usage_policy": [
+        "LLM is used only in planning and skill compilation phases",
+        "Execution phase operates without LLM unless recovery is required",
+        "Cached skills are always preferred over recomputation",
+        "Re-learning is strictly threshold-triggered"
+      ],
+
+      "browser_efficiency_policy": [
+        "Reuse browser sessions when safe",
+        "Avoid redundant navigation or re-fetching of known states",
+        "Cache stable UI structure per site session",
+        "Prefer deterministic execution paths over exploration"
+      ],
+
+      "optimization_goal": "Minimize interaction passes per website while maximizing deterministic success rate and stability"
+    },
+
+    "safety_and_boundary_conditions": {
+      "hard_limits": [
+        "No CAPTCHA bypass or authentication evasion",
+        "No exploitation of vulnerabilities or system weaknesses",
+        "No privilege escalation or unauthorized access attempts",
+        "Only operate within user-accessible browser sessions",
+        "No inference beyond observed UI or network context"
+      ],
+
+      "data_handling_rules": [
+        "Only visible UI or network-observable data is used",
+        "No persistent storage of sensitive credentials beyond session scope",
+        "No background probing or hidden system interaction",
+        "No external assumptions beyond browser-observed state"
+      ]
+    },
+
+    "system_failure_model": {
+      "failure_categories": {
+        "soft_failure": [
+          "Minor UI layout shift",
+          "Optional field mismatch",
+          "Timing or latency variation",
+          "Non-critical step deviation"
+        ],
+        "hard_failure": [
+          "Broken workflow dependency",
+          "Authentication/session failure",
+          "Missing critical UI elements",
+          "Invalid or missing network response schema"
+        ]
+      },
+
+      "recovery_hierarchy": [
+        "1. Local step correction",
+        "2. Skill graph fallback path execution",
+        "3. Partial skill patching",
+        "4. Site-scoped re-learning",
+        "5. Abort execution safely"
+      ],
+
+      "failure_cascade_limit": "If 2 full re-learning cycles fail for a site, it is permanently marked as unsupported unless manually reset"
+    },
+
+    "system_unified_definition": "The system is a deterministic Web Workflow Compiler Agent that transforms interactive websites into executable programs. It observes UI behavior, network activity, and interaction traces to build structured workflow graphs ('skills'). These skills are stored per-site in isolated memory and executed deterministically. Learning is bounded, event-driven, and strictly scoped to individual websites.",
+
+    "final_abstraction": "Websites are treated as state machines; interaction traces are source code; compiled skills are executable programs; and the system functions as a compiler + runtime for web-based workflows with strict isolation and bounded adaptation rules."
+  },
+  "validation_status": "COMPLETE",
+  "next": null
+}
+```
+
+
+
+
+
+```json
+[
+  {
+    "idea": "Initial web crawler agent for form filling and dataset downloads",
+    "trigger": "Need to automate data retrieval from complex portals like government datasets and form-based websites",
+    "problem_it_solved": "Manual browsing and downloading of structured datasets was slow and repetitive",
+    "rejected_alternatives": [
+      "Manual download workflows",
+      "Simple rule-based scraping scripts"
+    ],
+    "resulting_shift": "Framed the problem as an autonomous agent rather than a static scraper"
+  },
+  {
+    "idea": "Recognition of Selenium-based automation failure on dynamic portals (e.g., WRIS datasets)",
+    "trigger": "Selenium scripts breaking due to inconsistent UI and dynamic form rendering",
+    "problem_it_solved": "Exposed brittleness of selector-based automation in real-world web systems",
+    "rejected_alternatives": [
+      "Improving XPath/CSS selectors",
+      "Hardcoding form flows per site"
+    ],
+    "resulting_shift": "Need for adaptive, non-selector-based understanding of websites"
+  },
+  {
+    "idea": "Shift to multi-modal web understanding (UI + visual + interaction + network signals)",
+    "trigger": "Realization that DOM alone does not represent actual system behavior",
+    "problem_it_solved": "Hidden complexity in modern web apps (dynamic rendering, JS-driven state, invisible APIs)",
+    "rejected_alternatives": [
+      "DOM-only scraping",
+      "Static HTML parsing approaches"
+    ],
+    "resulting_shift": "Agent must observe full runtime behavior, not static structure"
+  },
+  {
+    "idea": "Network interception to discover hidden backend APIs",
+    "trigger": "Observation that UI actions trigger structured backend requests",
+    "problem_it_solved": "UI complexity hides simpler machine-readable data sources",
+    "rejected_alternatives": [
+      "Pure UI automation without backend inspection",
+      "Manual endpoint discovery"
+    ],
+    "resulting_shift": "Introduce hybrid UI + network inference for better extraction efficiency"
+  },
+  {
+    "idea": "Skill compiler (interaction traces → reusable workflows)",
+    "trigger": "Repeated need to perform similar workflows across sessions and sites",
+    "problem_it_solved": "Lack of reusability in ad-hoc automation scripts",
+    "rejected_alternatives": [
+      "Writing per-site scripts manually",
+      "Stateless one-off automation runs"
+    ],
+    "resulting_shift": "Automation becomes a compiled program instead of a script"
+  },
+  {
+    "idea": "Site-isolated learning model",
+    "trigger": "High variability across websites and risk of cross-site generalization failure",
+    "problem_it_solved": "Prevented interference between different website behaviors",
+    "rejected_alternatives": [
+      "Global learning model across websites",
+      "Shared selector or workflow templates"
+    ],
+    "resulting_shift": "Each website becomes an independent learned system (state machine)"
+  },
+  {
+    "idea": "Separation of learning and execution phases",
+    "trigger": "Need to reduce repeated expensive exploration for known workflows",
+    "problem_it_solved": "Avoided redundant re-learning for every task execution",
+    "rejected_alternatives": [
+      "Always re-exploring websites per request",
+      "Fully reactive agent without memory"
+    ],
+    "resulting_shift": "Introduced deterministic execution after compilation"
+  },
+  {
+    "idea": "Strict system constraints (no hardcoded selectors, browser-as-truth model)",
+    "trigger": "Fragility of traditional scraping and automation systems",
+    "problem_it_solved": "Eliminated brittle dependency on DOM structure",
+    "rejected_alternatives": [
+      "Selector-based automation frameworks",
+      "Heuristic scraping rules"
+    ],
+    "resulting_shift": "System becomes observation-driven rather than structure-driven"
+  },
+  {
+    "idea": "Failure handling and re-learning loops",
+    "trigger": "Dynamic websites breaking previously valid workflows",
+    "problem_it_solved": "Allowed system to recover from UI and backend changes",
+    "rejected_alternatives": [
+      "Manual script debugging",
+      "Static automation pipelines without adaptation"
+    ],
+    "resulting_shift": "Introduced controlled re-learning and bounded recovery mechanisms"
+  }
+]
+```
