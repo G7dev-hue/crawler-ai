@@ -56,6 +56,34 @@
                 <div id="timeline_controls" class="timeline-controls">
                   <input id="history_slider" type="range" min="0" max="0" value="0" step="1" oninput="setHistoryCursor(this.value);">
                   <div id="history_steps" class="history-steps"></div>
+                  <div id="evolution_player" class="evolution-player" aria-label="Evolution player">
+                    <div class="player-buttons">
+                      <button type="button" class="player-button" onclick="jumpPlayerToStart();" title="Jump to start">⏮</button>
+                      <button type="button" class="player-button" onclick="previousPlayerStep();" title="Previous step">◀</button>
+                      <button type="button" class="player-button" onclick="playEvolution();" title="Play">▶</button>
+                      <button type="button" class="player-button" onclick="pauseEvolution();" title="Pause">❚❚</button>
+                      <button type="button" class="player-button" onclick="nextPlayerStep();" title="Next step">▶</button>
+                      <button type="button" class="player-button" onclick="jumpPlayerToEnd();" title="Jump to end">⏭</button>
+                    </div>
+                    <div class="player-settings">
+                      <label>Start <select id="player_start" class="browser-default player-select" onchange="setPlayerStart(this.value);"></select></label>
+                      <label>Stop <select id="player_stop" class="browser-default player-select" onchange="setPlayerStop(this.value);"></select></label>
+                      <label>Speed
+                        <select id="player_speed" class="browser-default player-select" onchange="setPlayerSpeed(this.value);">
+                          <option value="0.25">0.25x</option>
+                          <option value="0.5">0.5x</option>
+                          <option value="1" selected>1x</option>
+                          <option value="2">2x</option>
+                          <option value="4">4x</option>
+                        </select>
+                      </label>
+                      <label class="player-loop">
+                        <input id="player_loop" type="checkbox" onchange="setPlayerLoop(this.checked);">
+                        <span>Loop</span>
+                      </label>
+                      <span id="player_status" class="player-status">Paused at step 0</span>
+                    </div>
+                  </div>
                   <div id="history_legend" class="history-legend" aria-label="Evolution trail legend"></div>
                 </div>
                 <div id="state_inspector" class="state-inspector">

@@ -416,10 +416,10 @@ function gen_bloch_sphere() {
 }
 
 
-const TRAIL_STRONG_ARROW_COUNT = 3;
-const TRAIL_FADED_ARROW_COUNT = 3;
 const TRAIL_MAX_VISIBLE_ARROWS = 8;
-const TRAIL_PREVIEW_SEGMENT_LIMIT = 6;
+const TRAIL_PREVIEW_SEGMENT_LIMIT = 2;
+const TRAIL_ACTIVE_QUEUE_COUNT = 3;
+const TRAIL_FADE_QUEUE_COUNT = 3;
 
 function historyTraceLength() {
     const input = document.getElementById('phosphor_length');
@@ -449,34 +449,80 @@ function resolveSegmentEntry(segmentIndex, segment) {
     };
 }
 
-function trailStyleForAge(age) {
-    if (age <= TRAIL_STRONG_ARROW_COUNT) {
+function queueRoleForSegment(segmentIndex, stopidx) {
+    const age = stopidx - segmentIndex;
+    if (age <= TRAIL_ACTIVE_QUEUE_COUNT) {
+        return "active";
+    }
+    if (age <= TRAIL_ACTIVE_QUEUE_COUNT + TRAIL_FADE_QUEUE_COUNT) {
+        return "fading";
+    }
+    return "tail";
+}
+
+function trailStyleForRole(role) {
+    if (role === "active") {
         return {
             lineOpacity: 0.92,
-            lineWidth: 5,
+            lineWidth: 7,
             arrowOpacity: 0.95,
-            arrowSize: 0.16,
+            arrowSize: 0.18,
+            arrowScale: 0.19,
+            arrowSpacing: 2,
             markerOpacity: 1,
-            textSize: 13
+            markerSize: 10,
+            textSize: 14,
+            directionalArrows: true,
+            endpointArrow: true,
+            numberedMarker: true
         };
     }
-    if (age <= TRAIL_STRONG_ARROW_COUNT + TRAIL_FADED_ARROW_COUNT) {
+    if (role === "fading") {
         return {
             lineOpacity: 0.38,
-            lineWidth: 3,
+            lineWidth: 4,
             arrowOpacity: 0.42,
             arrowSize: 0.13,
+            arrowScale: 0.14,
+            arrowSpacing: 5,
             markerOpacity: 0.58,
-            textSize: 12
+            markerSize: 8,
+            textSize: 12,
+            directionalArrows: true,
+            endpointArrow: true,
+            numberedMarker: true
         };
     }
     return {
-        lineOpacity: 0.13,
+        lineOpacity: 0.11,
         lineWidth: 2,
-        arrowOpacity: 0.24,
-        arrowSize: 0.11,
-        markerOpacity: 0.32,
-        textSize: 11
+        arrowOpacity: 0,
+        arrowSize: 0,
+        arrowScale: 0,
+        arrowSpacing: 0,
+        markerOpacity: 0,
+        markerSize: 0,
+        textSize: 0,
+        directionalArrows: false,
+        endpointArrow: false,
+        numberedMarker: false
+    };
+}
+
+function futureTrailStyle() {
+    return {
+        lineOpacity: 0.2,
+        lineWidth: 2,
+        arrowOpacity: 0.25,
+        arrowSize: 0.1,
+        arrowScale: 0.12,
+        arrowSpacing: 8,
+        markerOpacity: 0.3,
+        markerSize: 7,
+        textSize: 11,
+        directionalArrows: true,
+        endpointArrow: false,
+        numberedMarker: true
     };
 }
 
@@ -489,19 +535,13 @@ function escapeHoverText(value) {
 }
 
 function stepHoverTemplate(entry, prefix="Trail segment") {
-    const operationText = typeof operationSummary === "function" ? operationSummary(entry) : entry.label;
-    const rows = [
-        "<b>" + escapeHoverText(prefix) + " " + escapeHoverText(entry.step) + "</b>",
-        "Operation: " + escapeHoverText(operationText),
-        "Kind: " + escapeHoverText(entry.kind || "operation")
+    const label = typeof formatStepNumber === "function" ? formatStepNumber(entry.step) : entry.step;
+    const rows = typeof getStepTooltipRows === "function" ? getStepTooltipRows(entry) : [
+        "Operation: " + entry.label,
+        "Kind: " + (entry.kind || "operation")
     ];
-    if (entry.afterVector && typeof formatBlochVector === "function") {
-        rows.push("Bloch: " + escapeHoverText(formatBlochVector(entry.afterVector)));
-    }
-    if (entry.createdAt) {
-        rows.push("Recorded: " + escapeHoverText(entry.createdAt));
-    }
-    return rows.join("<br>") + "<extra></extra>";
+    const escapedRows = rows.map(function(row) { return escapeHoverText(row); });
+    return "<b>" + escapeHoverText(prefix) + " " + escapeHoverText(label) + "</b><br>" + escapedRows.join("<br>") + "<extra></extra>";
 }
 
 function isFinitePoint(segment, index) {
@@ -550,6 +590,51 @@ function segmentDirection(segment) {
         }
     }
     return fallback;
+}
+
+function segmentTangentAt(segment, index) {
+    if (!segment || !segment.x || segment.x.length === 0) {
+        return null;
+    }
+    const currentIndex = Math.max(0,Math.min(index,segment.x.length - 1));
+    let previousIndex = currentIndex - 1;
+    let nextIndex = currentIndex + 1;
+    while (previousIndex >= 0 && !isFinitePoint(segment,previousIndex)) {
+        previousIndex--;
+    }
+    while (nextIndex < segment.x.length && !isFinitePoint(segment,nextIndex)) {
+        nextIndex++;
+    }
+    if (previousIndex >= 0 && nextIndex < segment.x.length) {
+        return normalizeVector({
+            x: segment.x[nextIndex] - segment.x[previousIndex],
+            y: segment.y[nextIndex] - segment.y[previousIndex],
+            z: segment.z[nextIndex] - segment.z[previousIndex]
+        });
+    }
+    if (previousIndex >= 0) {
+        return normalizeVector({
+            x: segment.x[currentIndex] - segment.x[previousIndex],
+            y: segment.y[currentIndex] - segment.y[previousIndex],
+            z: segment.z[currentIndex] - segment.z[previousIndex]
+        });
+    }
+    if (nextIndex < segment.x.length) {
+        return normalizeVector({
+            x: segment.x[nextIndex] - segment.x[currentIndex],
+            y: segment.y[nextIndex] - segment.y[currentIndex],
+            z: segment.z[nextIndex] - segment.z[currentIndex]
+        });
+    }
+    return normalizeVector({
+        x: segment.x[currentIndex],
+        y: segment.y[currentIndex],
+        z: segment.z[currentIndex]
+    });
+}
+
+function stepDisplayNumber(step) {
+    return typeof formatStepNumber === "function" ? formatStepNumber(step) : String(step);
 }
 
 function offsetTipPoint(tip, direction) {
@@ -601,6 +686,54 @@ function evolutionArrowTrace(segment, entry, style) {
     };
 }
 
+function directionalArrowTrace(segment, entry, style, prefix="Path direction") {
+    if (!style.directionalArrows || !segment || !segment.x || segment.x.length <= 2) {
+        return null;
+    }
+    const x = [];
+    const y = [];
+    const z = [];
+    const u = [];
+    const v = [];
+    const w = [];
+    const spacing = Math.max(1,style.arrowSpacing);
+    for (let i = spacing; i < segment.x.length - 1; i += spacing) {
+        if (!isFinitePoint(segment,i)) {
+            continue;
+        }
+        const tangent = segmentTangentAt(segment,i);
+        if (!tangent) {
+            continue;
+        }
+        x.push(segment.x[i]);
+        y.push(segment.y[i]);
+        z.push(segment.z[i]);
+        u.push(tangent.x * style.arrowScale);
+        v.push(tangent.y * style.arrowScale);
+        w.push(tangent.z * style.arrowScale);
+    }
+    if (x.length === 0) {
+        return null;
+    }
+    return {
+        name: "Step " + entry.step + " direction",
+        x: x,
+        y: y,
+        z: z,
+        u: u,
+        v: v,
+        w: w,
+        type: 'cone',
+        anchor: 'tip',
+        sizemode: 'absolute',
+        sizeref: style.arrowSize,
+        colorscale: [['0.0', entry.color], ['1.0', entry.color]],
+        showscale: false,
+        opacity: style.arrowOpacity,
+        hovertemplate: stepHoverTemplate(entry,prefix)
+    };
+}
+
 function evolutionMarkerTrace(segment, entry, style) {
     const tip = segmentTip(segment);
     const direction = segmentDirection(segment);
@@ -619,10 +752,10 @@ function evolutionMarkerTrace(segment, entry, style) {
         opacity: style.markerOpacity,
         marker: {
             color: entry.color,
-            size: 8,
+            size: style.markerSize,
             line: {color: '#ffffff', width: 1}
         },
-        text: [String(entry.step)],
+        text: [stepDisplayNumber(entry.step)],
         textfont: {color: '#ffffff', size: style.textSize},
         textposition: 'middle center',
         hovertemplate: stepHoverTemplate(entry,"Step marker")
@@ -637,18 +770,23 @@ function buildEvolutionTrailTraces(startidx, stopidx) {
             continue;
         }
         const entry = resolveSegmentEntry(segmentIndex,segment);
-        const age = stopidx - segmentIndex;
-        const style = trailStyleForAge(age);
+        const style = trailStyleForRole(queueRoleForSegment(segmentIndex,stopidx));
         traces.push(evolutionLineTrace(segment,entry,style));
-        if (age <= TRAIL_MAX_VISIBLE_ARROWS) {
+        const directionTrace = directionalArrowTrace(segment,entry,style);
+        if (directionTrace) {
+            traces.push(directionTrace);
+        }
+        if (style.endpointArrow && stopidx - segmentIndex <= TRAIL_MAX_VISIBLE_ARROWS) {
             const arrowTrace = evolutionArrowTrace(segment,entry,style);
             if (arrowTrace) {
                 traces.push(arrowTrace);
             }
         }
-        const markerTrace = evolutionMarkerTrace(segment,entry,style);
-        if (markerTrace) {
-            traces.push(markerTrace);
+        if (style.numberedMarker) {
+            const markerTrace = evolutionMarkerTrace(segment,entry,style);
+            if (markerTrace) {
+                traces.push(markerTrace);
+            }
         }
     }
     return traces;
@@ -674,6 +812,7 @@ function dashedTrajectory(segment, dashPoints=2, gapPoints=2) {
 
 function futurePreviewTrace(segment, entry) {
     const dashed = dashedTrajectory(segment);
+    const style = futureTrailStyle();
     return {
         name: "Step " + entry.step + " future preview",
         x: dashed.x,
@@ -682,8 +821,8 @@ function futurePreviewTrace(segment, entry) {
         type: 'scatter3d',
         showscale: false,
         mode: 'lines',
-        opacity: 0.18,
-        line: {color: entry.color, width: 2},
+        opacity: style.lineOpacity,
+        line: {color: entry.color, width: style.lineWidth},
         hovertemplate: stepHoverTemplate(entry,"Future preview")
     };
 }
@@ -696,29 +835,116 @@ function buildFuturePreviewTraces(startidx, maxSegments) {
         if (!segment) {
             continue;
         }
-        traces.push(futurePreviewTrace(segment,resolveSegmentEntry(segmentIndex,segment)));
+        const entry = resolveSegmentEntry(segmentIndex,segment);
+        const style = futureTrailStyle();
+        traces.push(futurePreviewTrace(segment,entry));
+        const directionTrace = directionalArrowTrace(segment,entry,style,"Future direction");
+        if (directionTrace) {
+            traces.push(directionTrace);
+        }
+        const markerTrace = evolutionMarkerTrace(segment,entry,style);
+        if (markerTrace) {
+            traces.push(markerTrace);
+        }
     }
     return traces;
 }
 
+function playbackDotTraces(playback) {
+    if (!playback || !playback.point || !playback.entry) {
+        return [];
+    }
+    const point = playback.point;
+    const color = playback.entry.color || "#1a237e";
+    const hovertemplate = stepHoverTemplate(playback.entry,"Playback position");
+    return [
+        {
+            name: "Playback glow",
+            x: [point.x],
+            y: [point.y],
+            z: [point.z],
+            type: 'scatter3d',
+            mode: 'markers',
+            marker: {color: color, size: 18, opacity: 0.22},
+            opacity: 0.35,
+            hovertemplate: hovertemplate
+        },
+        {
+            name: "Playback position",
+            x: [point.x],
+            y: [point.y],
+            z: [point.z],
+            type: 'scatter3d',
+            mode: 'markers',
+            marker: {
+                color: '#ffffff',
+                size: 6,
+                line: {color: color, width: 3}
+            },
+            opacity: 1,
+            hovertemplate: hovertemplate
+        }
+    ];
+}
+
+function playbackEndpointArrowTrace(playback) {
+    if (!playback || !playback.point || !playback.entry) {
+        return null;
+    }
+    const segment = PHOSPHOR[playback.segmentIndex];
+    if (!segment) {
+        return null;
+    }
+    const sampleIndex = Math.max(0,Math.min(Math.round(playback.sample),segment.x.length - 1));
+    const tangent = segmentTangentAt(segment,sampleIndex);
+    if (!tangent) {
+        return null;
+    }
+    return {
+        name: "Playback endpoint",
+        x: [playback.point.x],
+        y: [playback.point.y],
+        z: [playback.point.z],
+        u: [tangent.x * 0.22],
+        v: [tangent.y * 0.22],
+        w: [tangent.z * 0.22],
+        type: 'cone',
+        anchor: 'tip',
+        sizemode: 'absolute',
+        sizeref: 0.17,
+        colorscale: [['0.0', playback.entry.color], ['1.0', playback.entry.color]],
+        showscale: false,
+        opacity: 0.95,
+        hovertemplate: stepHoverTemplate(playback.entry,"Playback direction")
+    };
+}
+
 function update_state_plot(full_update=false) {
-    const point_vector = state2vector(getCurrentState());
+    const playback = typeof getPlaybackRenderState === "function" ? getPlaybackRenderState() : null;
+    const point_vector = playback ? playback.vector : state2vector(getCurrentState());
     const new_data = gen_vector_plot(point_vector);
     let phosphor_data;
     let preview_data = [];
+    let playback_data = [];
     if (PHOSPHOR_ENABLED === true) {
         const phosphor_length = historyTraceLength();
-        const stopidx = HISTORY_CURSOR;
+        const stopidx = playback ? Math.max(HISTORY_CURSOR,playback.segmentIndex + 1) : HISTORY_CURSOR;
         let startidx = stopidx-phosphor_length;
         if (startidx < 0) {
             startidx = 0;
         }
         phosphor_data = buildEvolutionTrailTraces(startidx,stopidx);
-        if (phosphor_length > 0 && HISTORY_CURSOR < PHOSPHOR.length) {
+        const playerStop = typeof getPlayerStopIndex === "function" ? getPlayerStopIndex() : PHOSPHOR.length;
+        if (phosphor_length > 0 && stopidx < PHOSPHOR.length && stopidx < playerStop) {
             preview_data = buildFuturePreviewTraces(
-                HISTORY_CURSOR,
-                Math.min(phosphor_length,TRAIL_PREVIEW_SEGMENT_LIMIT)
+                stopidx,
+                Math.min(phosphor_length,TRAIL_PREVIEW_SEGMENT_LIMIT,playerStop - stopidx)
             );
+        }
+        playback_data = playbackDotTraces(playback);
+        const endpointTrace = playbackEndpointArrowTrace(playback);
+        if (endpointTrace) {
+            playback_data.push(endpointTrace);
         }
         //console.log("Phosphor set to");
         //console.log(phosphor_data);
@@ -740,7 +966,7 @@ function update_state_plot(full_update=false) {
       });
       */
     
-      init_plotting(BLOCHSPHERE.concat(new_data).concat(phosphor_data).concat(preview_data));
+      init_plotting(BLOCHSPHERE.concat(new_data).concat(phosphor_data).concat(preview_data).concat(playback_data));
 
 }
 

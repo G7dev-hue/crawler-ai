@@ -10,6 +10,11 @@ const HISTORY_TRAIL_COLORS = [
     "#5d4037",
     "#283593"
 ];
+const QUEUE_ACTIVE_COUNT = 3;
+const QUEUE_FADE_COUNT = 3;
+const QUEUE_FUTURE_COUNT = 2;
+const PLAYER_BASE_SAMPLES_PER_SECOND = 18;
+const CIRCLED_STEP_NUMBERS = ["⓪","①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
 
 var QMSTATEVECTOR = [gen_state(true)];
 var BLOCHSPHERE =  gen_bloch_sphere();
@@ -17,6 +22,17 @@ var PHOSPHOR = [];
 var PHOSPHOR_ENABLED = true;
 var HISTORY = [createInitialHistoryEntry(QMSTATEVECTOR[0])];
 var HISTORY_CURSOR = 0;
+var PLAYER = {
+    playing: false,
+    loop: false,
+    speed: 1,
+    startIndex: 0,
+    stopIndex: HISTORY.length - 1,
+    currentStep: HISTORY_CURSOR,
+    currentSample: 0
+};
+var PLAYER_FRAME = null;
+var PLAYER_LAST_FRAME_TIME = null;
 var STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
 
 init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
@@ -24,6 +40,7 @@ init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
 rabi_plot();
 renderTimeline();
 renderInspector();
+renderPlayerControls();
 
 
 function getCurrentState() {
@@ -34,6 +51,7 @@ function renderApp() {
     update_state_plot();
     renderTimeline();
     renderInspector();
+    renderPlayerControls();
 }
 
 function truncateFutureHistory() {
@@ -45,12 +63,18 @@ function truncateFutureHistory() {
 }
 
 function setHistoryCursor(index) {
+    pauseEvolution(false);
     const parsedIndex = parseInt(index,10);
     if (Number.isNaN(parsedIndex)) {
         return;
     }
-    HISTORY_CURSOR = Math.max(0,Math.min(parsedIndex,HISTORY.length - 1));
+    setHistoryCursorInternal(parsedIndex);
+    syncPlayerPositionToCursor();
     renderApp();
+}
+
+function setHistoryCursorInternal(index) {
+    HISTORY_CURSOR = Math.max(0,Math.min(index,HISTORY.length - 1));
 }
 
 function renderTimeline() {
@@ -75,7 +99,7 @@ function renderTimeline() {
 
         const stepNumber = document.createElement('span');
         stepNumber.className = 'history-step-number';
-        stepNumber.textContent = entry.step;
+        stepNumber.textContent = formatStepNumber(entry.step);
         const stepLabel = document.createElement('span');
         stepLabel.className = 'history-step-label';
         stepLabel.textContent = entry.label;
@@ -92,6 +116,10 @@ function getStepColor(step) {
     }
     const colors = [getHistoryBaseColor()].concat(HISTORY_TRAIL_COLORS);
     return colors[(step - 1) % colors.length];
+}
+
+function formatStepNumber(step) {
+    return CIRCLED_STEP_NUMBERS[step] || String(step);
 }
 
 function getHistoryBaseColor() {
@@ -124,16 +152,34 @@ function renderHistoryLegend() {
     }
     legend.innerHTML = "";
 
-    for (let i = 0; i < HISTORY.length; i++) {
-        const entry = ensureHistoryEntryVisuals(HISTORY[i],i);
+    const groups = queueLegendGroups();
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+        if (groups[groupIndex].entries.length === 0) {
+            continue;
+        }
+        const section = document.createElement('div');
+        section.className = 'history-legend-section';
+        const heading = document.createElement('div');
+        heading.className = 'history-legend-heading';
+        heading.textContent = groups[groupIndex].label;
+        section.appendChild(heading);
+
+        for (let i = 0; i < groups[groupIndex].entries.length; i++) {
+            section.appendChild(createLegendItem(groups[groupIndex].entries[i],groups[groupIndex].className));
+        }
+        legend.appendChild(section);
+    }
+}
+
+function createLegendItem(entry, className) {
         const item = document.createElement('div');
-        item.className = 'history-legend-item' + (i > HISTORY_CURSOR ? ' future' : '');
+        item.className = 'history-legend-item' + (className ? ' ' + className : '');
         item.style.setProperty('--step-color',entry.color);
         item.title = plainStepMetadata(entry);
 
         const stepNumber = document.createElement('span');
         stepNumber.className = 'history-legend-step';
-        stepNumber.textContent = entry.step;
+        stepNumber.textContent = formatStepNumber(entry.step);
         const swatch = document.createElement('span');
         swatch.className = 'history-legend-swatch';
         const operation = document.createElement('span');
@@ -143,23 +189,75 @@ function renderHistoryLegend() {
         item.appendChild(stepNumber);
         item.appendChild(swatch);
         item.appendChild(operation);
-        legend.appendChild(item);
+        return item;
+}
+
+function queueLegendGroups() {
+    const stopidx = currentTrailStopIndex();
+    const futureStop = Math.min(PHOSPHOR.length,Math.max(stopidx,PLAYER.stopIndex),stopidx + QUEUE_FUTURE_COUNT);
+    const activeStart = Math.max(0,stopidx - QUEUE_ACTIVE_COUNT);
+    const fadeStart = Math.max(0,activeStart - QUEUE_FADE_COUNT);
+    const groups = [
+        {label: "ACTIVE", className: "active", entries: segmentEntries(activeStart,stopidx)},
+        {label: "FADING", className: "fading", entries: segmentEntries(fadeStart,activeStart)},
+        {label: "FUTURE", className: "future", entries: segmentEntries(stopidx,futureStop)}
+    ];
+
+    if (HISTORY.length === 1) {
+        groups[0].entries = [ensureHistoryEntryVisuals(HISTORY[0],0)];
     }
+    return groups;
+}
+
+function segmentEntries(startSegment, stopSegment) {
+    const entries = [];
+    for (let segmentIndex = startSegment; segmentIndex < stopSegment; segmentIndex++) {
+        const entry = getHistoryEntryForSegment(segmentIndex);
+        if (entry) {
+            entries.push(entry);
+        }
+    }
+    return entries;
+}
+
+function currentTrailStopIndex() {
+    const playback = getPlaybackRenderState();
+    if (playback) {
+        return Math.min(PHOSPHOR.length,playback.segmentIndex + 1);
+    }
+    return Math.min(PHOSPHOR.length,HISTORY_CURSOR);
 }
 
 function plainStepMetadata(entry) {
+    return getStepTooltipRows(entry).join("\n");
+}
+
+function getStepTooltipRows(entry) {
     const metadata = [
-        "Step " + entry.step,
-        "Operation: " + entry.label,
+        "Step " + formatStepNumber(entry.step) + ": " + entry.label,
         "Kind: " + entry.kind
     ];
+    if (entry.beforeState) {
+        metadata.push("Before: " + symbolicKet(entry.beforeState));
+    }
+    if (entry.afterState) {
+        metadata.push("After: " + symbolicKet(entry.afterState));
+    }
+    if (entry.params && entry.params.angle !== undefined) {
+        metadata.push("Angle: " + formatAngle(entry.params.angle));
+    }
     if (entry.params && Object.keys(entry.params).length > 0) {
         metadata.push("Parameters: " + formatStepParams(entry.params));
+    }
+    if (entry.beforeState && entry.afterState) {
+        const analysis = analyzeTransition(entry.beforeState,entry.afterState);
+        metadata.push("Phase shift: " + formatPhaseValue(analysis.relativePhase.delta));
+        metadata.push("Probability change: |0⟩ " + formatSignedPercent(analysis.probabilities.deltaZero) + ", |1⟩ " + formatSignedPercent(analysis.probabilities.deltaOne));
     }
     if (entry.afterVector) {
         metadata.push("Bloch: " + formatBlochVector(entry.afterVector));
     }
-    return metadata.join("\n");
+    return metadata;
 }
 
 function formatStepParams(params) {
@@ -169,6 +267,300 @@ function formatStepParams(params) {
     catch (error) {
         return "[complex parameters]";
     }
+}
+
+function clampPlayerIndex(index) {
+    const parsedIndex = parseInt(index,10);
+    if (Number.isNaN(parsedIndex)) {
+        return 0;
+    }
+    return Math.max(0,Math.min(parsedIndex,HISTORY.length - 1));
+}
+
+function syncPlayerBounds() {
+    PLAYER.startIndex = clampPlayerIndex(PLAYER.startIndex);
+    PLAYER.stopIndex = clampPlayerIndex(PLAYER.stopIndex);
+    if (PLAYER.startIndex > PLAYER.stopIndex) {
+        PLAYER.stopIndex = PLAYER.startIndex;
+    }
+    PLAYER.currentStep = clampPlayerIndex(PLAYER.currentStep);
+    if (PLAYER.currentStep >= HISTORY.length - 1) {
+        PLAYER.currentSample = 0;
+    }
+}
+
+function syncPlayerPositionToCursor() {
+    syncPlayerBounds();
+    PLAYER.currentStep = HISTORY_CURSOR;
+    PLAYER.currentSample = 0;
+}
+
+function renderPlayerControls() {
+    syncPlayerBounds();
+    renderPlayerStepSelect(document.getElementById('player_start'),PLAYER.startIndex);
+    renderPlayerStepSelect(document.getElementById('player_stop'),PLAYER.stopIndex);
+
+    const speed = document.getElementById('player_speed');
+    if (speed) {
+        speed.value = String(PLAYER.speed);
+    }
+    const loop = document.getElementById('player_loop');
+    if (loop) {
+        loop.checked = PLAYER.loop;
+    }
+    const status = document.getElementById('player_status');
+    if (status) {
+        status.textContent = playerStatusText();
+    }
+    const buttons = document.querySelectorAll('.player-button');
+    for (let i = 0; i < buttons.length; i++) {
+        buttons[i].disabled = HISTORY.length <= 1;
+    }
+}
+
+function renderPlayerStepSelect(select, selectedValue) {
+    if (!select) {
+        return;
+    }
+    if (select.dataset.optionCount !== String(HISTORY.length)) {
+        select.innerHTML = "";
+        for (let i = 0; i < HISTORY.length; i++) {
+            const entry = ensureHistoryEntryVisuals(HISTORY[i],i);
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = formatStepNumber(i) + " " + entry.label;
+            select.appendChild(option);
+        }
+        select.dataset.optionCount = String(HISTORY.length);
+    }
+    select.value = String(selectedValue);
+}
+
+function playerStatusText() {
+    if (PLAYER.playing && PLAYER.loop) {
+        return "Looping " + PLAYER.startIndex + " → " + PLAYER.stopIndex;
+    }
+    if (PLAYER.playing) {
+        const activeStep = Math.min(PLAYER.currentStep + 1,PLAYER.stopIndex);
+        return "Playing step " + activeStep + " / " + PLAYER.stopIndex;
+    }
+    const pausedStep = PLAYER.currentSample > 0 ? Math.min(PLAYER.currentStep + 1,HISTORY.length - 1) : HISTORY_CURSOR;
+    return "Paused at step " + pausedStep;
+}
+
+function setPlayerStart(value) {
+    pauseEvolution(false);
+    PLAYER.startIndex = clampPlayerIndex(value);
+    if (PLAYER.startIndex > PLAYER.stopIndex) {
+        PLAYER.stopIndex = PLAYER.startIndex;
+    }
+    renderPlayerControls();
+    renderHistoryLegend();
+}
+
+function setPlayerStop(value) {
+    pauseEvolution(false);
+    PLAYER.stopIndex = clampPlayerIndex(value);
+    if (PLAYER.stopIndex < PLAYER.startIndex) {
+        PLAYER.startIndex = PLAYER.stopIndex;
+    }
+    renderPlayerControls();
+    renderHistoryLegend();
+    update_state_plot();
+}
+
+function setPlayerSpeed(value) {
+    const parsedSpeed = parseFloat(value);
+    if (!Number.isNaN(parsedSpeed) && parsedSpeed > 0) {
+        PLAYER.speed = parsedSpeed;
+    }
+    renderPlayerControls();
+}
+
+function setPlayerLoop(checked) {
+    PLAYER.loop = checked === true;
+    renderPlayerControls();
+}
+
+function jumpPlayerToStart() {
+    pauseEvolution(false);
+    movePlayerToStep(PLAYER.startIndex);
+}
+
+function jumpPlayerToEnd() {
+    pauseEvolution(false);
+    movePlayerToStep(PLAYER.stopIndex);
+}
+
+function previousPlayerStep() {
+    pauseEvolution(false);
+    const target = PLAYER.currentSample > 0 ? PLAYER.currentStep : HISTORY_CURSOR - 1;
+    movePlayerToStep(Math.max(0,target));
+}
+
+function nextPlayerStep() {
+    pauseEvolution(false);
+    const target = PLAYER.currentSample > 0 ? PLAYER.currentStep + 1 : HISTORY_CURSOR + 1;
+    movePlayerToStep(Math.min(HISTORY.length - 1,target));
+}
+
+function movePlayerToStep(index) {
+    setHistoryCursorInternal(clampPlayerIndex(index));
+    syncPlayerPositionToCursor();
+    renderApp();
+}
+
+function playEvolution() {
+    syncPlayerBounds();
+    if (HISTORY.length <= 1 || PLAYER.startIndex === PLAYER.stopIndex) {
+        renderPlayerControls();
+        return;
+    }
+    if (HISTORY_CURSOR < PLAYER.startIndex || HISTORY_CURSOR >= PLAYER.stopIndex) {
+        setHistoryCursorInternal(PLAYER.startIndex);
+        syncPlayerPositionToCursor();
+    }
+    if (PLAYER.currentStep < PLAYER.startIndex || PLAYER.currentStep >= PLAYER.stopIndex) {
+        PLAYER.currentStep = HISTORY_CURSOR;
+        PLAYER.currentSample = 0;
+    }
+    PLAYER.playing = true;
+    PLAYER_LAST_FRAME_TIME = null;
+    queuePlayerFrame();
+    renderApp();
+}
+
+function pauseEvolution(render=true) {
+    PLAYER.playing = false;
+    PLAYER_LAST_FRAME_TIME = null;
+    if (PLAYER_FRAME !== null) {
+        cancelAnimationFrame(PLAYER_FRAME);
+        PLAYER_FRAME = null;
+    }
+    if (render) {
+        renderPlayerControls();
+        update_state_plot();
+    }
+}
+
+function queuePlayerFrame() {
+    if (PLAYER_FRAME !== null) {
+        cancelAnimationFrame(PLAYER_FRAME);
+    }
+    PLAYER_FRAME = requestAnimationFrame(stepEvolutionPlayer);
+}
+
+function stepEvolutionPlayer(timestamp) {
+    PLAYER_FRAME = null;
+    if (!PLAYER.playing) {
+        return;
+    }
+    if (PLAYER_LAST_FRAME_TIME === null) {
+        PLAYER_LAST_FRAME_TIME = timestamp;
+    }
+    const deltaSeconds = Math.min((timestamp - PLAYER_LAST_FRAME_TIME) / 1000,0.25);
+    PLAYER_LAST_FRAME_TIME = timestamp;
+    const crossedBoundary = advanceEvolutionPlayer(deltaSeconds);
+    if (crossedBoundary) {
+        renderApp();
+    }
+    else {
+        update_state_plot();
+        renderPlayerControls();
+    }
+    if (PLAYER.playing) {
+        queuePlayerFrame();
+    }
+}
+
+function advanceEvolutionPlayer(deltaSeconds) {
+    let crossedBoundary = false;
+    let sampleAdvance = deltaSeconds * PLAYER_BASE_SAMPLES_PER_SECOND * PLAYER.speed;
+
+    while (sampleAdvance > 0 && PLAYER.playing) {
+        if (PLAYER.currentStep >= PLAYER.stopIndex) {
+            crossedBoundary = finishPlayerRange();
+            break;
+        }
+        const segment = PHOSPHOR[PLAYER.currentStep];
+        if (!segment || !segment.x || segment.x.length <= 1) {
+            setHistoryCursorInternal(Math.min(PLAYER.currentStep + 1,HISTORY.length - 1));
+            PLAYER.currentStep = HISTORY_CURSOR;
+            PLAYER.currentSample = 0;
+            crossedBoundary = true;
+            continue;
+        }
+        const maxSample = segment.x.length - 1;
+        const remaining = maxSample - PLAYER.currentSample;
+        if (sampleAdvance < remaining) {
+            PLAYER.currentSample += sampleAdvance;
+            sampleAdvance = 0;
+        }
+        else {
+            sampleAdvance -= remaining;
+            setHistoryCursorInternal(Math.min(PLAYER.currentStep + 1,HISTORY.length - 1));
+            PLAYER.currentStep = HISTORY_CURSOR;
+            PLAYER.currentSample = 0;
+            crossedBoundary = true;
+            if (PLAYER.currentStep >= PLAYER.stopIndex) {
+                finishPlayerRange();
+            }
+        }
+    }
+    return crossedBoundary;
+}
+
+function finishPlayerRange() {
+    if (PLAYER.loop && PLAYER.startIndex < PLAYER.stopIndex) {
+        setHistoryCursorInternal(PLAYER.startIndex);
+        syncPlayerPositionToCursor();
+        return true;
+    }
+    PLAYER.playing = false;
+    setHistoryCursorInternal(PLAYER.stopIndex);
+    syncPlayerPositionToCursor();
+    return true;
+}
+
+function getPlaybackRenderState() {
+    if (!PLAYER || (!PLAYER.playing && PLAYER.currentSample <= 0)) {
+        return null;
+    }
+    if (PLAYER.currentStep < 0 || PLAYER.currentStep >= PHOSPHOR.length || PLAYER.currentStep >= PLAYER.stopIndex) {
+        return null;
+    }
+    const segment = PHOSPHOR[PLAYER.currentStep];
+    const point = interpolateSegmentPoint(segment,PLAYER.currentSample);
+    if (!point) {
+        return null;
+    }
+    return {
+        segmentIndex: PLAYER.currentStep,
+        sample: PLAYER.currentSample,
+        vector: [point.x,point.y,point.z],
+        point: point,
+        entry: getHistoryEntryForSegment(PLAYER.currentStep)
+    };
+}
+
+function interpolateSegmentPoint(segment, sample) {
+    if (!segment || !segment.x || segment.x.length === 0) {
+        return null;
+    }
+    const maxIndex = segment.x.length - 1;
+    const clampedSample = Math.max(0,Math.min(sample,maxIndex));
+    const leftIndex = Math.floor(clampedSample);
+    const rightIndex = Math.min(maxIndex,leftIndex + 1);
+    const fraction = clampedSample - leftIndex;
+    return {
+        x: segment.x[leftIndex] + (segment.x[rightIndex] - segment.x[leftIndex]) * fraction,
+        y: segment.y[leftIndex] + (segment.y[rightIndex] - segment.y[leftIndex]) * fraction,
+        z: segment.z[leftIndex] + (segment.z[rightIndex] - segment.z[leftIndex]) * fraction
+    };
+}
+
+function getPlayerStopIndex() {
+    return PLAYER.stopIndex;
 }
 
 function createInitialHistoryEntry(initialState) {
@@ -563,7 +955,7 @@ function renderInspector() {
     const beta = state['_data'][1];
     const vector = entry.afterVector || state2vector(state);
 
-    operation.textContent = "Step " + entry.step + ": " + entry.label;
+    operation.textContent = "Step " + formatStepNumber(entry.step) + ": " + entry.label;
     ket.textContent = symbolicKet(state);
     probabilities.textContent = "|0⟩: " + formatPercent(probability(alpha)) + ", |1⟩: " + formatPercent(probability(beta));
     bloch.textContent = formatBlochVector(vector);
@@ -588,6 +980,8 @@ function appendHistoryEntry(kind, label, params, beforeState, afterState) {
     };
     HISTORY.push(entry);
     HISTORY_CURSOR = HISTORY.length - 1;
+    PLAYER.stopIndex = HISTORY.length - 1;
+    syncPlayerPositionToCursor();
     console.log("Applied operation:", entry);
     return entry;
 }
@@ -600,6 +994,7 @@ function operationLabel(axis, angle) {
 }
 
 function rotate_state(axis,angle,metadata={}) {
+    pauseEvolution(false);
     truncateFutureHistory();
     const beforeState = getCurrentState();
     const afterState = rot(axis,angle,beforeState);
@@ -617,6 +1012,7 @@ function rotate_state(axis,angle,metadata={}) {
 
 
 function pulse_apply(axis){
+    pauseEvolution(false);
     truncateFutureHistory();
     const time = document.getElementById('pulselength').value;
     const beforeState = getCurrentState();
@@ -676,26 +1072,34 @@ function custom_rotate_state(){
 
 
 function undo() {
+    pauseEvolution(false);
     if (HISTORY_CURSOR > 0){
         truncateFutureHistory();
         QMSTATEVECTOR.pop();
         PHOSPHOR.pop();
         HISTORY.pop();
         HISTORY_CURSOR = HISTORY.length - 1;
+        PLAYER.stopIndex = HISTORY.length - 1;
+        syncPlayerPositionToCursor();
         renderApp();
     }
 
 }
 
 function restart() {
+    pauseEvolution(false);
     QMSTATEVECTOR = [gen_state(true)];
     BLOCHSPHERE =  gen_bloch_sphere();
     PHOSPHOR = [];
     PHOSPHOR_ENABLED = true;
     HISTORY = [createInitialHistoryEntry(QMSTATEVECTOR[0])];
     HISTORY_CURSOR = 0;
+    PLAYER.startIndex = 0;
+    PLAYER.stopIndex = 0;
+    syncPlayerPositionToCursor();
     STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
     init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
     renderTimeline();
     renderInspector();
+    renderPlayerControls();
 }
