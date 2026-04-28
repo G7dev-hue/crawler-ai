@@ -107,7 +107,7 @@ function gen_vector_plot(vector,normalize=true) {
     //console.log(u);
     //console.log(v);
     //console.log(w);
-    hovertext = '￨Ψ〉= ￨0〉+ 0.5 ￨1〉<extra></extra>';
+    hovertext = '|Ψ⟩ = |0⟩ + 0.5 |1⟩<extra></extra>';
     
     /*var upp = {
         name: 'stick',
@@ -369,10 +369,10 @@ function gen_bloch_sphere() {
     north_text = document.getElementById('north_text').value;
     south_text = document.getElementById('south_text').value;
     if (north_text != "") {
-        north_text = "￨" + north_text + "〉"
+        north_text = "|" + north_text + "⟩"
     }
     if (south_text != "") {
-        south_text = "￨" + south_text + "〉"
+        south_text = "|" + south_text + "⟩"
     }
 
     var axes = {

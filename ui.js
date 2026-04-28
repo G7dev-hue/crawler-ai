@@ -156,8 +156,8 @@ function renderInspector() {
     const vector = entry.afterVector || state2vector(state);
 
     operation.textContent = entry.label;
-    ket.textContent = formatComplex(alpha) + "|0> + " + formatComplex(beta) + "|1>";
-    probabilities.textContent = "|0>: " + formatPercent(probability(alpha)) + ", |1>: " + formatPercent(probability(beta));
+    ket.textContent = formatComplex(alpha) + "|0⟩ + " + formatComplex(beta) + "|1⟩";
+    probabilities.textContent = "|0⟩: " + formatPercent(probability(alpha)) + ", |1⟩: " + formatPercent(probability(beta));
     bloch.textContent = "x: " + formatReal(vector[0]) + ", y: " + formatReal(vector[1]) + ", z: " + formatReal(vector[2]);
     phase.textContent = formatRelativePhase(state);
 }
