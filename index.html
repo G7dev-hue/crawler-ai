@@ -56,6 +56,7 @@
                 <div id="timeline_controls" class="timeline-controls">
                   <input id="history_slider" type="range" min="0" max="0" value="0" step="1" oninput="setHistoryCursor(this.value);">
                   <div id="history_steps" class="history-steps"></div>
+                  <div id="history_legend" class="history-legend" aria-label="Evolution trail legend"></div>
                 </div>
                 <div id="state_inspector" class="state-inspector">
                   <div class="state-inspector-title">State Transition Explanation</div>
@@ -200,7 +201,7 @@
                           <tr><td>
                         Spin color
                         </td><td><input type="color" id="spin_color" value="#1a237e" onchange="update_state_plot();"></td>
-                      <td>Histrory trace color</td><td><input type="color" id="phosphor_color" value="#1a237e" /></td>
+                      <td>History base color</td><td><input type="color" id="phosphor_color" value="#1a237e" /></td>
                       </tr>
                       <tr>
                         <td>Top state text</td><td><input type="text" id="north_text" value="0" style="width:5em" onchange="BLOCHSPHERE =  gen_bloch_sphere();update_state_plot(full_update=true)"></td>

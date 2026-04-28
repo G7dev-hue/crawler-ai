@@ -64,7 +64,7 @@ function print_state(state){
     console.log(arrText);
 }
 
-function rot_phosphor(axis_op, angle, state, divider=10) {
+function rot_phosphor(axis_op, angle, state, divider=10, historyEntry=null) {
     //console.log("Divider is");
     //console.log(divider);
     const uarr = [];
@@ -92,12 +92,15 @@ function rot_phosphor(axis_op, angle, state, divider=10) {
     
     var hist = {
         x:uarr, y: varr, z: warr,
+        historyId: historyEntry ? historyEntry.id : null,
+        step: historyEntry ? historyEntry.step : PHOSPHOR.length + 1,
+        color: historyEntry ? historyEntry.color : document.getElementById('phosphor_color').value,
         type: 'scatter3d',
         showscale: false,
-        hoverinfo: 'skip', 
+        hoverinfo: 'skip',
         mode: 'lines',
         opacity: 1.0,
-        line: {color: document.getElementById('phosphor_color').value, width:3},
+        line: {color: historyEntry ? historyEntry.color : document.getElementById('phosphor_color').value, width:3},
     }
     PHOSPHOR.push(hist);
 }
@@ -190,7 +193,7 @@ function rabi_plot(data=null) {
     return math.multiply(rot_op,state)
   }
   
-  function pulse_phosphor(axis,time,state,divider=10) {
+  function pulse_phosphor(axis,time,state,divider=10, historyEntry=null) {
     
     const uarr = [];
     const varr = [];
@@ -210,12 +213,15 @@ function rabi_plot(data=null) {
     
     var hist = {
         x:uarr, y: varr, z: warr,
+        historyId: historyEntry ? historyEntry.id : null,
+        step: historyEntry ? historyEntry.step : PHOSPHOR.length + 1,
+        color: historyEntry ? historyEntry.color : document.getElementById('phosphor_color').value,
         type: 'scatter3d',
         showscale: false,
-        hoverinfo: 'skip', 
+        hoverinfo: 'skip',
         mode: 'lines',
         opacity: 1.0,
-        line: {color: document.getElementById('phosphor_color').value, width:3},
+        line: {color: historyEntry ? historyEntry.color : document.getElementById('phosphor_color').value, width:3},
     }
     PHOSPHOR.push(hist);
   }

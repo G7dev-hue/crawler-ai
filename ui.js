@@ -1,3 +1,16 @@
+const HISTORY_TRAIL_COLORS = [
+    "#1565c0",
+    "#2e7d32",
+    "#c62828",
+    "#6a1b9a",
+    "#ef6c00",
+    "#00838f",
+    "#ad1457",
+    "#558b2f",
+    "#5d4037",
+    "#283593"
+];
+
 var QMSTATEVECTOR = [gen_state(true)];
 var BLOCHSPHERE =  gen_bloch_sphere();
 var PHOSPHOR = [];
@@ -52,21 +65,120 @@ function renderTimeline() {
     steps.innerHTML = "";
 
     for (let i = 0; i < HISTORY.length; i++) {
-        const entry = HISTORY[i];
+        const entry = ensureHistoryEntryVisuals(HISTORY[i],i);
         const step = document.createElement('button');
         step.type = 'button';
         step.className = 'history-step' + (HISTORY_CURSOR === i ? ' active' : '');
-        step.textContent = i + ': ' + entry.label;
+        step.style.setProperty('--step-color',entry.color);
+        step.title = plainStepMetadata(entry);
         step.onclick = function() { setHistoryCursor(i); };
+
+        const stepNumber = document.createElement('span');
+        stepNumber.className = 'history-step-number';
+        stepNumber.textContent = entry.step;
+        const stepLabel = document.createElement('span');
+        stepLabel.className = 'history-step-label';
+        stepLabel.textContent = entry.label;
+        step.appendChild(stepNumber);
+        step.appendChild(stepLabel);
         steps.appendChild(step);
+    }
+    renderHistoryLegend();
+}
+
+function getStepColor(step) {
+    if (step === 0) {
+        return "#455a64";
+    }
+    const colors = [getHistoryBaseColor()].concat(HISTORY_TRAIL_COLORS);
+    return colors[(step - 1) % colors.length];
+}
+
+function getHistoryBaseColor() {
+    const input = document.getElementById('phosphor_color');
+    return input && input.value ? input.value : "#1a237e";
+}
+
+function ensureHistoryEntryVisuals(entry, index) {
+    if (entry.step === undefined || entry.step === null) {
+        entry.step = index;
+    }
+    if (!entry.color) {
+        entry.color = getStepColor(entry.step);
+    }
+    return entry;
+}
+
+function getHistoryEntryForSegment(segmentIndex) {
+    const historyIndex = segmentIndex + 1;
+    if (historyIndex < 0 || historyIndex >= HISTORY.length) {
+        return null;
+    }
+    return ensureHistoryEntryVisuals(HISTORY[historyIndex],historyIndex);
+}
+
+function renderHistoryLegend() {
+    const legend = document.getElementById('history_legend');
+    if (!legend) {
+        return;
+    }
+    legend.innerHTML = "";
+
+    for (let i = 0; i < HISTORY.length; i++) {
+        const entry = ensureHistoryEntryVisuals(HISTORY[i],i);
+        const item = document.createElement('div');
+        item.className = 'history-legend-item' + (i > HISTORY_CURSOR ? ' future' : '');
+        item.style.setProperty('--step-color',entry.color);
+        item.title = plainStepMetadata(entry);
+
+        const stepNumber = document.createElement('span');
+        stepNumber.className = 'history-legend-step';
+        stepNumber.textContent = entry.step;
+        const swatch = document.createElement('span');
+        swatch.className = 'history-legend-swatch';
+        const operation = document.createElement('span');
+        operation.className = 'history-legend-operation';
+        operation.textContent = operationSummary(entry);
+
+        item.appendChild(stepNumber);
+        item.appendChild(swatch);
+        item.appendChild(operation);
+        legend.appendChild(item);
+    }
+}
+
+function plainStepMetadata(entry) {
+    const metadata = [
+        "Step " + entry.step,
+        "Operation: " + entry.label,
+        "Kind: " + entry.kind
+    ];
+    if (entry.params && Object.keys(entry.params).length > 0) {
+        metadata.push("Parameters: " + formatStepParams(entry.params));
+    }
+    if (entry.afterVector) {
+        metadata.push("Bloch: " + formatBlochVector(entry.afterVector));
+    }
+    return metadata.join("\n");
+}
+
+function formatStepParams(params) {
+    try {
+        return JSON.stringify(params);
+    }
+    catch (error) {
+        return "[complex parameters]";
     }
 }
 
 function createInitialHistoryEntry(initialState) {
+    const step = 0;
     return {
         id: "init",
+        step: step,
         kind: "init",
         label: "Init",
+        color: getStepColor(step),
         params: {},
         beforeState: null,
         afterState: initialState,
@@ -445,13 +557,13 @@ function renderInspector() {
         return;
     }
 
-    const entry = HISTORY[HISTORY_CURSOR];
+    const entry = ensureHistoryEntryVisuals(HISTORY[HISTORY_CURSOR],HISTORY_CURSOR);
     const state = getCurrentState();
     const alpha = state['_data'][0];
     const beta = state['_data'][1];
     const vector = entry.afterVector || state2vector(state);
 
-    operation.textContent = entry.label;
+    operation.textContent = "Step " + entry.step + ": " + entry.label;
     ket.textContent = symbolicKet(state);
     probabilities.textContent = "|0⟩: " + formatPercent(probability(alpha)) + ", |1⟩: " + formatPercent(probability(beta));
     bloch.textContent = formatBlochVector(vector);
@@ -460,10 +572,13 @@ function renderInspector() {
 }
 
 function appendHistoryEntry(kind, label, params, beforeState, afterState) {
+    const step = HISTORY.length;
     const entry = {
-        id: "op-" + HISTORY.length,
+        id: "op-" + step,
+        step: step,
         kind: kind,
         label: label,
+        color: getStepColor(step),
         params: params,
         beforeState: beforeState,
         afterState: afterState,
@@ -489,14 +604,14 @@ function rotate_state(axis,angle,metadata={}) {
     const beforeState = getCurrentState();
     const afterState = rot(axis,angle,beforeState);
     QMSTATEVECTOR.push(afterState);
-    rot_phosphor(axis,angle,beforeState,Math.max(6,Math.round(angle/(0.5*math.PI)*10)));
-    appendHistoryEntry(
+    const entry = appendHistoryEntry(
         metadata.kind || "rotation",
         metadata.label || operationLabel(axis, angle),
         metadata.params || {axis: axis, angle: angle},
         beforeState,
         afterState
     );
+    rot_phosphor(axis,angle,beforeState,Math.max(6,Math.round(angle/(0.5*math.PI)*10)),entry);
     renderApp();
 }
 
@@ -507,14 +622,14 @@ function pulse_apply(axis){
     const beforeState = getCurrentState();
     const afterState = pulse(axis,time,beforeState);
     QMSTATEVECTOR.push(afterState);
-    pulse_phosphor(axis,time,beforeState,Math.max(6,Math.round(time/0.01)));
-    appendHistoryEntry(
+    const entry = appendHistoryEntry(
         "pulse",
         "Pulse " + axis,
         {axis: axis, time: time},
         beforeState,
         afterState
     );
+    pulse_phosphor(axis,time,beforeState,Math.max(6,Math.round(time/0.01)),entry);
     renderApp();
   }
   
