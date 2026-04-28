@@ -422,11 +422,11 @@ function update_state_plot(full_update=false) {
     let phosphor_data;
     if (PHOSPHOR_ENABLED === true) {
         const phosphor_length = document.getElementById('phosphor_length').value - 1;
-        let startidx = PHOSPHOR.length-1-phosphor_length;
+        const stopidx = HISTORY_CURSOR;
+        let startidx = stopidx-1-phosphor_length;
         if (startidx < 0) {
             startidx = 0;
         }
-        const stopidx = PHOSPHOR.length;
         phosphor_data = PHOSPHOR.slice(startidx,stopidx);
         //console.log("Phosphor set to");
         //console.log(phosphor_data);

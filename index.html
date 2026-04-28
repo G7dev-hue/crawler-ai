@@ -52,9 +52,11 @@
             <div class="col s6">
 
                 <div id='myDiv' class='card' style='padding-bottom: 100%;'><noscript>Javascript necessary</noscript></div>
+                <div id="timeline_controls" class="timeline-controls">
+                  <input id="history_slider" type="range" min="0" max="0" value="0" step="1" oninput="setHistoryCursor(this.value);">
+                  <div id="history_steps" class="history-steps"></div>
+                </div>
                 <a class="waves-effect waves-light btn-small" onclick="export_png()" style="margin-bottom: 1em;">Download</a>
-                
-                
             </div>
             <div class="col s6">
 

@@ -1,22 +1,70 @@
 var QMSTATEVECTOR = [gen_state(true)];
 var BLOCHSPHERE =  gen_bloch_sphere();
-var STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
 var PHOSPHOR = [];
 var PHOSPHOR_ENABLED = true;
 var HISTORY = [];
 var HISTORY_CURSOR = 0;
+var STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
 
 init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
 // BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR)
 rabi_plot();
+renderTimeline();
 
 
 function getCurrentState() {
-    return QMSTATEVECTOR[QMSTATEVECTOR.length-1];
+    return QMSTATEVECTOR[HISTORY_CURSOR];
 }
 
 function renderApp() {
     update_state_plot();
+    renderTimeline();
+}
+
+function truncateFutureHistory() {
+    if (HISTORY_CURSOR < HISTORY.length) {
+        HISTORY = HISTORY.slice(0,HISTORY_CURSOR);
+        QMSTATEVECTOR = QMSTATEVECTOR.slice(0,HISTORY_CURSOR + 1);
+        PHOSPHOR = PHOSPHOR.slice(0,HISTORY_CURSOR);
+    }
+}
+
+function setHistoryCursor(index) {
+    const parsedIndex = parseInt(index,10);
+    if (Number.isNaN(parsedIndex)) {
+        return;
+    }
+    HISTORY_CURSOR = Math.max(0,Math.min(parsedIndex,HISTORY.length));
+    renderApp();
+}
+
+function renderTimeline() {
+    const slider = document.getElementById('history_slider');
+    const steps = document.getElementById('history_steps');
+    if (!slider || !steps) {
+        return;
+    }
+
+    slider.max = HISTORY.length;
+    slider.value = HISTORY_CURSOR;
+    steps.innerHTML = "";
+
+    const initStep = document.createElement('button');
+    initStep.type = 'button';
+    initStep.className = 'history-step' + (HISTORY_CURSOR === 0 ? ' active' : '');
+    initStep.textContent = '0: Init';
+    initStep.onclick = function() { setHistoryCursor(0); };
+    steps.appendChild(initStep);
+
+    for (let i = 0; i < HISTORY.length; i++) {
+        const entry = HISTORY[i];
+        const step = document.createElement('button');
+        step.type = 'button';
+        step.className = 'history-step' + (HISTORY_CURSOR === i + 1 ? ' active' : '');
+        step.textContent = (i + 1) + ': ' + entry.label;
+        step.onclick = function() { setHistoryCursor(i + 1); };
+        steps.appendChild(step);
+    }
 }
 
 function appendHistoryEntry(kind, label, params, beforeState, afterState) {
@@ -45,6 +93,7 @@ function operationLabel(axis, angle) {
 }
 
 function rotate_state(axis,angle,metadata={}) {
+    truncateFutureHistory();
     const beforeState = getCurrentState();
     const afterState = rot(axis,angle,beforeState);
     QMSTATEVECTOR.push(afterState);
@@ -61,6 +110,7 @@ function rotate_state(axis,angle,metadata={}) {
 
 
 function pulse_apply(axis){
+    truncateFutureHistory();
     const time = document.getElementById('pulselength').value;
     const beforeState = getCurrentState();
     const afterState = pulse(axis,time,beforeState);
@@ -119,13 +169,14 @@ function custom_rotate_state(){
 
 
 function undo() {
-    if (QMSTATEVECTOR.length> 1){
-    QMSTATEVECTOR.pop();
-    PHOSPHOR.pop();
-    HISTORY.pop();
-    HISTORY_CURSOR = HISTORY.length;
-    renderApp();
-}
+    if (HISTORY_CURSOR > 0){
+        truncateFutureHistory();
+        QMSTATEVECTOR.pop();
+        PHOSPHOR.pop();
+        HISTORY.pop();
+        HISTORY_CURSOR = HISTORY.length;
+        renderApp();
+    }
 
 }
 
@@ -138,4 +189,5 @@ function restart() {
     HISTORY = [];
     HISTORY_CURSOR = 0;
     init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
+    renderTimeline();
 }
