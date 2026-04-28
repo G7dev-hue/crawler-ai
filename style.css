@@ -67,11 +67,24 @@ body {
 }
 
 .transition-explanation {
-  border-top: 1px solid #e0e0e0;
+  display: grid;
+  gap: 0.5em;
   margin-top: 0.6em;
   padding-top: 0.6em;
 }
 
-.transition-explanation p {
-  margin: 0 0 0.35em;
+.transition-section {
+  background: #f8f8fb;
+  border: 1px solid #e0e0e8;
+  padding: 0.55em 0.65em;
+}
+
+.transition-section-title {
+  color: #1a237e;
+  font-weight: 600;
+  margin-bottom: 0.25em;
+}
+
+.transition-section p {
+  margin: 0;
 }

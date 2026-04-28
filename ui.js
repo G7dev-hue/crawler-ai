@@ -128,7 +128,7 @@ function formatRelativePhase(state) {
     if (phase === null) {
         return "undefined";
     }
-    return formatReal(phase,3) + " rad";
+    return formatAngle(phase);
 }
 
 function relativePhaseValue(state) {
@@ -234,25 +234,167 @@ function formatSignedPercent(value) {
 }
 
 function formatPhaseValue(value) {
-    return value === null ? "undefined" : formatReal(value,3) + " rad";
+    return value === null ? "undefined" : formatAngle(value);
+}
+
+function closeTo(value, target, tolerance=0.001) {
+    return Math.abs(value - target) <= tolerance;
+}
+
+function normalizedAngle(value) {
+    let angle = value;
+    while (angle < 0) {
+        angle += 2 * Math.PI;
+    }
+    while (angle >= 2 * Math.PI) {
+        angle -= 2 * Math.PI;
+    }
+    return angle;
+}
+
+function formatAngle(value) {
+    if (value === null) {
+        return "undefined";
+    }
+    const sign = value < 0 ? "-" : "";
+    const magnitude = Math.abs(value);
+    const candidates = [
+        {value: 0, label: "0"},
+        {value: Math.PI / 4, label: "π/4"},
+        {value: Math.PI / 2, label: "π/2"},
+        {value: 3 * Math.PI / 4, label: "3π/4"},
+        {value: Math.PI, label: "π"},
+        {value: 5 * Math.PI / 4, label: "5π/4"},
+        {value: 3 * Math.PI / 2, label: "3π/2"},
+        {value: 7 * Math.PI / 4, label: "7π/4"},
+        {value: 2 * Math.PI, label: "2π"}
+    ];
+
+    for (let i = 0; i < candidates.length; i++) {
+        if (closeTo(magnitude,candidates[i].value)) {
+            return candidates[i].label === "0" ? "0 rad" : sign + candidates[i].label + " rad";
+        }
+    }
+    return formatReal(value,3) + " rad";
+}
+
+function canonicalStateName(state) {
+    const probs = stateProbabilities(state);
+    const phase = relativePhaseValue(state);
+    if (closeTo(probs.zero,1) && closeTo(probs.one,0)) {
+        return "|0⟩";
+    }
+    if (closeTo(probs.zero,0) && closeTo(probs.one,1)) {
+        return "|1⟩";
+    }
+    if (!closeTo(probs.zero,0.5) || !closeTo(probs.one,0.5) || phase === null) {
+        return null;
+    }
+
+    const angle = normalizedAngle(phase);
+    if (closeTo(angle,0) || closeTo(angle,2 * Math.PI)) {
+        return "|+⟩";
+    }
+    if (closeTo(angle,Math.PI)) {
+        return "|−⟩";
+    }
+    if (closeTo(angle,Math.PI / 2)) {
+        return "|+i⟩";
+    }
+    if (closeTo(angle,3 * Math.PI / 2)) {
+        return "|−i⟩";
+    }
+    return null;
+}
+
+function symbolicKet(state) {
+    const canonical = canonicalStateName(state);
+    if (canonical) {
+        return canonical;
+    }
+    const amplitudes = stateAmplitudes(state);
+    return formatComplex(amplitudes.alpha) + "|0⟩ + " + formatComplex(amplitudes.beta) + "|1⟩";
+}
+
+function blochAxisName(vector) {
+    const axes = [
+        {name: "+X", vector: [1,0,0]},
+        {name: "-X", vector: [-1,0,0]},
+        {name: "+Y", vector: [0,1,0]},
+        {name: "-Y", vector: [0,-1,0]},
+        {name: "+Z", vector: [0,0,1]},
+        {name: "-Z", vector: [0,0,-1]}
+    ];
+
+    for (let i = 0; i < axes.length; i++) {
+        if (blochAngularDisplacement(vector,axes[i].vector) < 0.001) {
+            return axes[i].name;
+        }
+    }
+    return null;
+}
+
+function formatBlochVector(vector) {
+    const axis = blochAxisName(vector);
+    const coords = "(" + vector.map(function(value) { return formatReal(value); }).join(", ") + ")";
+    return axis ? axis + " " + coords : coords;
+}
+
+function formatProbabilities(probs) {
+    return "|0⟩ " + formatPercent(probs.zero) + ", |1⟩ " + formatPercent(probs.one);
+}
+
+function operationSummary(entry) {
+    const parts = [entry.label];
+    if (entry.params && entry.params.angle !== undefined) {
+        parts.push("angle " + formatAngle(entry.params.angle));
+    }
+    if (entry.params && entry.params.polar !== undefined) {
+        parts.push("polar " + formatAngle(entry.params.polar));
+    }
+    if (entry.params && entry.params.azimuth !== undefined) {
+        parts.push("azimuth " + formatAngle(entry.params.azimuth));
+    }
+    if (entry.params && entry.params.time !== undefined) {
+        parts.push("time " + entry.params.time);
+    }
+    return parts.join(", ");
 }
 
 function describeTransition(entry) {
     if (!entry.beforeState) {
         return [
-            "Probability redistribution: initialized at " + formatPercent(1) + " in |0⟩ and " + formatPercent(0) + " in |1⟩.",
-            "Phase shift: no relative phase is defined because |1⟩ has zero amplitude.",
-            "Bloch sphere movement: initial state is placed at x: 0, y: 0, z: 1.",
-            "Interpretation: this snapshot establishes the starting point for later transitions."
+            {title: "Before", body: "No prior state. This is the initial snapshot."},
+            {title: "Operation", body: "Initialize the system."},
+            {title: "After", body: symbolicKet(entry.afterState) + " at " + formatBlochVector(entry.afterVector) + "; probabilities " + formatProbabilities(stateProbabilities(entry.afterState)) + "."},
+            {title: "What changed", body: "The history starts at the north pole with no transition yet."},
+            {title: "Interpretation", body: "This establishes the reference state for subsequent operations."}
         ];
     }
-
     const analysis = analyzeTransition(entry.beforeState,entry.afterState);
-    const probabilityText = "Probability redistribution: |0⟩ changed by " + formatSignedPercent(analysis.probabilities.deltaZero) + " and |1⟩ changed by " + formatSignedPercent(analysis.probabilities.deltaOne) + ".";
-    const phaseText = "Phase shift: relative phase moved from " + formatPhaseValue(analysis.relativePhase.before) + " to " + formatPhaseValue(analysis.relativePhase.after) + ", change " + formatPhaseValue(analysis.relativePhase.delta) + ".";
-    const blochText = "Bloch sphere movement: vector moved from (" + analysis.bloch.before.map(function(value) { return formatReal(value); }).join(", ") + ") to (" + analysis.bloch.after.map(function(value) { return formatReal(value); }).join(", ") + "), angular displacement " + formatReal(analysis.bloch.angularDisplacement,3) + " rad.";
-    const interpretationText = "Interpretation: " + transitionInterpretation(analysis);
-    return [probabilityText, phaseText, blochText, interpretationText];
+
+    return [
+        {
+            title: "Before",
+            body: symbolicKet(entry.beforeState) + " at " + formatBlochVector(analysis.bloch.before) + "; probabilities " + formatProbabilities(analysis.probabilities.before) + "; relative phase " + formatPhaseValue(analysis.relativePhase.before) + "."
+        },
+        {
+            title: "Operation",
+            body: operationSummary(entry) + "."
+        },
+        {
+            title: "After",
+            body: symbolicKet(entry.afterState) + " at " + formatBlochVector(analysis.bloch.after) + "; probabilities " + formatProbabilities(analysis.probabilities.after) + "; relative phase " + formatPhaseValue(analysis.relativePhase.after) + "."
+        },
+        {
+            title: "What changed",
+            body: "|0⟩ changed by " + formatSignedPercent(analysis.probabilities.deltaZero) + ", |1⟩ changed by " + formatSignedPercent(analysis.probabilities.deltaOne) + "; phase changed by " + formatPhaseValue(analysis.relativePhase.delta) + "; Bloch angle moved " + formatAngle(analysis.bloch.angularDisplacement) + "."
+        },
+        {
+            title: "Interpretation",
+            body: transitionInterpretation(analysis)
+        }
+    ];
 }
 
 function transitionInterpretation(analysis) {
@@ -278,11 +420,18 @@ function renderTransitionExplanation(entry) {
         return;
     }
     explanation.innerHTML = "";
-    const lines = describeTransition(entry);
-    for (let i = 0; i < lines.length; i++) {
-        const paragraph = document.createElement('p');
-        paragraph.textContent = lines[i];
-        explanation.appendChild(paragraph);
+    const sections = describeTransition(entry);
+    for (let i = 0; i < sections.length; i++) {
+        const section = document.createElement('div');
+        section.className = 'transition-section';
+        const title = document.createElement('div');
+        title.className = 'transition-section-title';
+        title.textContent = sections[i].title;
+        const body = document.createElement('p');
+        body.textContent = sections[i].body;
+        section.appendChild(title);
+        section.appendChild(body);
+        explanation.appendChild(section);
     }
 }
 
@@ -303,9 +452,9 @@ function renderInspector() {
     const vector = entry.afterVector || state2vector(state);
 
     operation.textContent = entry.label;
-    ket.textContent = formatComplex(alpha) + "|0⟩ + " + formatComplex(beta) + "|1⟩";
+    ket.textContent = symbolicKet(state);
     probabilities.textContent = "|0⟩: " + formatPercent(probability(alpha)) + ", |1⟩: " + formatPercent(probability(beta));
-    bloch.textContent = "x: " + formatReal(vector[0]) + ", y: " + formatReal(vector[1]) + ", z: " + formatReal(vector[2]);
+    bloch.textContent = formatBlochVector(vector);
     phase.textContent = formatRelativePhase(state);
     renderTransitionExplanation(entry);
 }
@@ -330,7 +479,7 @@ function appendHistoryEntry(kind, label, params, beforeState, afterState) {
 
 function operationLabel(axis, angle) {
     if (typeof(axis) === "string") {
-        return "R" + axis + "(" + angle + ")";
+        return "R" + axis + "(" + formatAngle(angle) + ")";
     }
     return "Custom rotation";
 }
