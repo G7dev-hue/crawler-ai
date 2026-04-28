@@ -1,16 +1,17 @@
 function state2vector(state) {
     // https://en.wikipedia.org/wiki/Bloch_sphere#u,_v,_w_representation
-    r01 = math.multiply(state['_data'][0],math.conj(state['_data'][1]));
-    r00 = math.multiply(state['_data'][0],math.conj(state['_data'][0]));
-    r11 = math.multiply(state['_data'][1],math.conj(state['_data'][1]));
-    u = -2*math.re(r01);
-    v = 2*math.im(r01);
-    w = math.re(r00-r11);
+    const r01 = math.multiply(state['_data'][0],math.conj(state['_data'][1]));
+    const r00 = math.multiply(state['_data'][0],math.conj(state['_data'][0]));
+    const r11 = math.multiply(state['_data'][1],math.conj(state['_data'][1]));
+    const u = -2*math.re(r01);
+    const v = 2*math.im(r01);
+    const w = math.re(r00-r11);
     return [u,v,w]
 }
 
 function rot(axis_op, angle, ...state) {
     //rot_op = (-1j*phi*op).expm()
+    let op;
     if (typeof(axis_op) === 'string') {
         if (axis_op === 'x') {
             op = math.matrix([[0,math.complex(0.5,0)],[math.complex(0.5,0),0]]);
@@ -35,7 +36,7 @@ function rot(axis_op, angle, ...state) {
     }
    
     //console.log(math.multiply(math.complex(0,-angle),op));
-    rot_op = math.expm(math.multiply(math.complex(0,-angle),op));
+    const rot_op = math.expm(math.multiply(math.complex(0,-angle),op));
     //console.log("Rotation operator");
     //console.log(rot_op);
     if (state.length === 0) {
@@ -59,23 +60,23 @@ function gen_state(up_is_true) {
 }
 
 function print_state(state){
-    arrText = '(' + state['_data'][0] + ', ' + state['_data'][1] + ')';
+    const arrText = '(' + state['_data'][0] + ', ' + state['_data'][1] + ')';
     console.log(arrText);
 }
 
 function rot_phosphor(axis_op, angle, state, divider=10) {
     //console.log("Divider is");
     //console.log(divider);
-    uarr = [];
-    varr = [];
-    warr = [];
-    [u,v,w] = state2vector(state);
+    const uarr = [];
+    const varr = [];
+    const warr = [];
+    let [u,v,w] = state2vector(state);
     uarr.push(u);
     varr.push(v);
     warr.push(w);
     
     for (var i = 1; i <= divider; i++) {
-        staten = rot(axis_op,angle/divider*i,state);
+        const staten = rot(axis_op,angle/divider*i,state);
         [u,v,w] = state2vector(staten);
         //console.log("We rotate by");
         //console.log(angle/divider*i);
@@ -102,15 +103,15 @@ function rot_phosphor(axis_op, angle, state, divider=10) {
 }
 
 function rabi_plot(data=null) {
-    time = document.getElementById('pulselength').value;
+    const time = document.getElementById('pulselength').value;
    if (data === null) {
-    t_stop = Math.max(2,time);
-    tax = linspace(0,t_stop,101);
-    detune = 2*math.PI*document.getElementById('detuning').value;
-    w1 = 2*math.PI*document.getElementById('amplitude').value;
-    Omega = math.sqrt(detune*detune+w1*w1);
-    arg_ax = math.dotMultiply(tax,Omega/2);
-    y = math.map(arg_ax,math.sin);
+    const t_stop = Math.max(2,time);
+    const tax = linspace(0,t_stop,101);
+    const detune = 2*math.PI*document.getElementById('detuning').value;
+    const w1 = 2*math.PI*document.getElementById('amplitude').value;
+    const Omega = math.sqrt(detune*detune+w1*w1);
+    const arg_ax = math.dotMultiply(tax,Omega/2);
+    let y = math.map(arg_ax,math.sin);
     y = math.dotMultiply(y,w1/Omega);
     y = math.map(y,math.square);
     data = [{
@@ -171,36 +172,36 @@ function rabi_plot(data=null) {
   }
     
   function pulse(axis, time, state) {
-    opZ = math.matrix([[math.complex(0.5,0),0],[0,math.complex(-0.5,0)]]);
-    detune = 2*math.PI*document.getElementById('detuning').value;
-    w1 = 2*math.PI*document.getElementById('amplitude').value;
-    phase = math.PI/180*document.getElementById('phase').value;
-    H0 = math.multiply(opZ,detune);
+    const opZ = math.matrix([[math.complex(0.5,0),0],[0,math.complex(-0.5,0)]]);
+    const detune = 2*math.PI*document.getElementById('detuning').value;
+    const w1 = 2*math.PI*document.getElementById('amplitude').value;
+    let phase = math.PI/180*document.getElementById('phase').value;
+    const H0 = math.multiply(opZ,detune);
     if (axis === "x") {
       //opX = math.matrix([[0,0.5*math.exp(math.complex(0,phase+math.PI/2))],[0.5*math.exp(math.complex(0,-phase-math.PI/2)),0]]); 
       //H1 = math.multiply(opX,w1);
       phase = phase + math.PI/2;
     }
     console.log(phase);
-    opT = math.matrix([[0,math.multiply(0.5,math.exp(math.complex(0,phase)))],[math.multiply(0.5,math.exp(math.complex(0,-phase))),0]]);
-    H1 = math.multiply(opT,w1);
+    const opT = math.matrix([[0,math.multiply(0.5,math.exp(math.complex(0,phase)))],[math.multiply(0.5,math.exp(math.complex(0,-phase))),0]]);
+    const H1 = math.multiply(opT,w1);
     console.log(H1);
-    rot_op = math.expm(math.multiply(math.complex(0,time),math.add(H0,H1)));
+    const rot_op = math.expm(math.multiply(math.complex(0,time),math.add(H0,H1)));
     return math.multiply(rot_op,state)
   }
   
   function pulse_phosphor(axis,time,state,divider=10) {
     
-    uarr = [];
-    varr = [];
-    warr = [];
-    [u,v,w] = state2vector(state);
+    const uarr = [];
+    const varr = [];
+    const warr = [];
+    let [u,v,w] = state2vector(state);
     uarr.push(u);
     varr.push(v);
     warr.push(w);
     
     for (var i = 1; i <= divider; i++) {
-        staten = pulse(axis,time/divider*i,state);
+        const staten = pulse(axis,time/divider*i,state);
         [u,v,w] = state2vector(staten);
         uarr.push(u);
         varr.push(v);

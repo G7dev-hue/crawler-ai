@@ -417,15 +417,16 @@ function gen_bloch_sphere() {
 
 
 function update_state_plot(full_update=false) {
-    point_vector = state2vector(QMSTATEVECTOR[QMSTATEVECTOR.length-1]);
-    new_data = gen_vector_plot(point_vector);
+    const point_vector = state2vector(getCurrentState());
+    const new_data = gen_vector_plot(point_vector);
+    let phosphor_data;
     if (PHOSPHOR_ENABLED === true) {
-        phosphor_length = document.getElementById('phosphor_length').value - 1;
-        startidx = PHOSPHOR.length-1-phosphor_length;
+        const phosphor_length = document.getElementById('phosphor_length').value - 1;
+        let startidx = PHOSPHOR.length-1-phosphor_length;
         if (startidx < 0) {
             startidx = 0;
         }
-        stopidx = PHOSPHOR.length;
+        const stopidx = PHOSPHOR.length;
         phosphor_data = PHOSPHOR.slice(startidx,stopidx);
         //console.log("Phosphor set to");
         //console.log(phosphor_data);
