@@ -2,7 +2,7 @@ var QMSTATEVECTOR = [gen_state(true)];
 var BLOCHSPHERE =  gen_bloch_sphere();
 var PHOSPHOR = [];
 var PHOSPHOR_ENABLED = true;
-var HISTORY = [];
+var HISTORY = [createInitialHistoryEntry(QMSTATEVECTOR[0])];
 var HISTORY_CURSOR = 0;
 var STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
 
@@ -22,8 +22,8 @@ function renderApp() {
 }
 
 function truncateFutureHistory() {
-    if (HISTORY_CURSOR < HISTORY.length) {
-        HISTORY = HISTORY.slice(0,HISTORY_CURSOR);
+    if (HISTORY_CURSOR < HISTORY.length - 1) {
+        HISTORY = HISTORY.slice(0,HISTORY_CURSOR + 1);
         QMSTATEVECTOR = QMSTATEVECTOR.slice(0,HISTORY_CURSOR + 1);
         PHOSPHOR = PHOSPHOR.slice(0,HISTORY_CURSOR);
     }
@@ -34,7 +34,7 @@ function setHistoryCursor(index) {
     if (Number.isNaN(parsedIndex)) {
         return;
     }
-    HISTORY_CURSOR = Math.max(0,Math.min(parsedIndex,HISTORY.length));
+    HISTORY_CURSOR = Math.max(0,Math.min(parsedIndex,HISTORY.length - 1));
     renderApp();
 }
 
@@ -45,31 +45,38 @@ function renderTimeline() {
         return;
     }
 
-    slider.max = HISTORY.length;
+    slider.max = HISTORY.length - 1;
     slider.value = HISTORY_CURSOR;
     steps.innerHTML = "";
-
-    const initStep = document.createElement('button');
-    initStep.type = 'button';
-    initStep.className = 'history-step' + (HISTORY_CURSOR === 0 ? ' active' : '');
-    initStep.textContent = '0: Init';
-    initStep.onclick = function() { setHistoryCursor(0); };
-    steps.appendChild(initStep);
 
     for (let i = 0; i < HISTORY.length; i++) {
         const entry = HISTORY[i];
         const step = document.createElement('button');
         step.type = 'button';
-        step.className = 'history-step' + (HISTORY_CURSOR === i + 1 ? ' active' : '');
-        step.textContent = (i + 1) + ': ' + entry.label;
-        step.onclick = function() { setHistoryCursor(i + 1); };
+        step.className = 'history-step' + (HISTORY_CURSOR === i ? ' active' : '');
+        step.textContent = i + ': ' + entry.label;
+        step.onclick = function() { setHistoryCursor(i); };
         steps.appendChild(step);
     }
 }
 
+function createInitialHistoryEntry(initialState) {
+    return {
+        id: "init",
+        kind: "init",
+        label: "Init",
+        params: {},
+        beforeState: null,
+        afterState: initialState,
+        beforeVector: null,
+        afterVector: state2vector(initialState),
+        createdAt: new Date().toISOString()
+    };
+}
+
 function appendHistoryEntry(kind, label, params, beforeState, afterState) {
     const entry = {
-        id: "op-" + (HISTORY.length + 1),
+        id: "op-" + HISTORY.length,
         kind: kind,
         label: label,
         params: params,
@@ -80,7 +87,7 @@ function appendHistoryEntry(kind, label, params, beforeState, afterState) {
         createdAt: new Date().toISOString()
     };
     HISTORY.push(entry);
-    HISTORY_CURSOR = HISTORY.length;
+    HISTORY_CURSOR = HISTORY.length - 1;
     console.log("Applied operation:", entry);
     return entry;
 }
@@ -174,7 +181,7 @@ function undo() {
         QMSTATEVECTOR.pop();
         PHOSPHOR.pop();
         HISTORY.pop();
-        HISTORY_CURSOR = HISTORY.length;
+        HISTORY_CURSOR = HISTORY.length - 1;
         renderApp();
     }
 
@@ -186,7 +193,7 @@ function restart() {
     STATEARROW = gen_vector_plot(state2vector(getCurrentState()));
     PHOSPHOR = [];
     PHOSPHOR_ENABLED = true;
-    HISTORY = [];
+    HISTORY = [createInitialHistoryEntry(QMSTATEVECTOR[0])];
     HISTORY_CURSOR = 0;
     init_plotting(BLOCHSPHERE.concat(STATEARROW).concat(PHOSPHOR));
     renderTimeline();
